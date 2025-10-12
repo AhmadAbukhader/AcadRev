@@ -1,23 +1,26 @@
 package com.AcadRev.Model;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 @Entity
 @Table(name = "role")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class Role {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private Integer id;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "roleType", nullable = false, unique = true)
-    private UserType roleType;
+    @Column(name = "role_type", nullable = false, unique = true)
+    private UserType role;
+
+    public Role(UserType type) {
+        this.role = type;
+    }
 
 }

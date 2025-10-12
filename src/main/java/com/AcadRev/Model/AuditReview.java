@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "auditReview")
+@Table(name = "audit_review")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -25,14 +25,14 @@ public class AuditReview {
 
     @ManyToOne
     @JoinColumn(name = "auditorId", nullable = false)
-    private Users auditor;
+    private User auditor;
 
     @Column(nullable = false)
     private Integer rating;
 
     private String comments;
 
-    @Column(nullable = false)
+    @Column(name = "reviewed_at", nullable = false)
     private LocalDateTime reviewedAt = LocalDateTime.now();
 
 

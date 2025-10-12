@@ -19,21 +19,23 @@ public class Document {
     private Long id;
 
     @ManyToOne
-    @JoinColumn(name = "companyId", nullable = false)
+    @JoinColumn(name = "company_id", nullable = false)
     private CompanyProfile company;
 
-    @Column(nullable = false)
+    @Column(name = "file_name", nullable = false)
     private String fileName;
 
     @Lob
-    @Column(nullable = false)
+    @Column(name = "file_data", nullable = false)
     private byte[] fileData;
 
+    @Column(name = "file_type")
     private String fileType;
 
+    @Column(name = "document_type")
     private String documentType;
 
-    @Column(nullable = false)
+    @Column(name = "uploaded_at", nullable = false)
     private LocalDateTime uploadedAt = LocalDateTime.now();
 
 }

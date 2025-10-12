@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "companyProfile")
+@Table(name = "company_profile")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -17,7 +17,7 @@ public class CompanyProfile {
 
     @OneToOne
     @JoinColumn(name = "userId", nullable = false, unique = true)
-    private Users user;
+    private User user;
 
     @Column(nullable = false)
     private String name;
