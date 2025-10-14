@@ -1,5 +1,7 @@
 package com.AcadRev.Service;
 
+import com.AcadRev.Exception.ResourceNotFoundException;
+import com.AcadRev.Exception.UnauthorizedAccessException;
 import com.AcadRev.Model.CompanyProfile;
 import com.AcadRev.Model.Document;
 import com.AcadRev.Model.User;
@@ -12,7 +14,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -21,16 +22,15 @@ public class DocumentService {
     private final DocumentRepository documentRepository;
     private final CompanyProfileRepository companyProfileRepository;
 
-
     public Document uploadDocument(MultipartFile file, int companyId, String documentType) throws IOException {
         CompanyProfile company = companyProfileRepository.findById(companyId)
-                .orElseThrow(() -> new RuntimeException("Company not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Company not found with ID: " + companyId));
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         User companyOwner = (User) auth.getPrincipal();
 
-        if (company.getUser().getId() != companyOwner.getId()) {
-            throw new RuntimeException("You are not the owner of this company");
+        if (!company.getUser().getId().equals(companyOwner.getId())) {
+            throw new UnauthorizedAccessException("You are not the owner of this company");
         }
 
         Document document = Document.builder()
@@ -39,25 +39,22 @@ public class DocumentService {
                 .fileData(file.getBytes())
                 .fileType(file.getContentType())
                 .documentType(documentType)
-                .uploadedAt(LocalDateTime.now())
                 .build();
 
-        documentRepository.save(document);
-        return document;
+        return documentRepository.save(document);
     }
 
     public Document getDocumentById(int id) {
         return documentRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Document not found with ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Document not found with ID: " + id));
     }
 
     public List<Document> getDocumentByName(String name) {
         List<Document> documents = documentRepository.findByFileName(name);
         if (documents.isEmpty()) {
-            throw new RuntimeException("No documents found with name: " + name);
+            throw new ResourceNotFoundException("No documents found with name: " + name);
         }
         return documents;
     }
-
 
 }

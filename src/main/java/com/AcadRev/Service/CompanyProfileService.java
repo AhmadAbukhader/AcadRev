@@ -1,6 +1,7 @@
 package com.AcadRev.Service;
 
 import com.AcadRev.Dto.CompanyProfileDto;
+import com.AcadRev.Exception.ResourceNotFoundException;
 import com.AcadRev.Model.CompanyProfile;
 import com.AcadRev.Model.Document;
 import com.AcadRev.Model.User;
@@ -12,7 +13,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -33,8 +33,7 @@ public class CompanyProfileService {
                 .industry(companyProfile.getIndustry())
                 .build();
 
-        companyProfileRepository.save(createdProfile);
-        return createdProfile;
+        return companyProfileRepository.save(createdProfile);
     }
 
     public List<CompanyProfile> getCompanies() {
@@ -42,17 +41,14 @@ public class CompanyProfileService {
     }
 
     public CompanyProfile getCompany(int id) {
-        Optional<CompanyProfile> profileOpt = companyProfileRepository.findById(id);
-        if (profileOpt == null) {
-            throw new RuntimeException("no such company");
-        }
-        return profileOpt.get();
+        return companyProfileRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Company not found with ID: " + id));
     }
 
     public List<Document> getCompanyDocuments(int companyId) {
         // Verify company exists
         companyProfileRepository.findById(companyId)
-                .orElseThrow(() -> new RuntimeException("Company not found with ID: " + companyId));
+                .orElseThrow(() -> new ResourceNotFoundException("Company not found with ID: " + companyId));
 
         // Return all documents for this company
         return documentRepository.findByCompany_Id(companyId);

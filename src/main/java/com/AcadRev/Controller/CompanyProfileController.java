@@ -33,22 +33,14 @@ public class CompanyProfileController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('AUDITOR')")
     public ResponseEntity<CompanyProfile> getCompanyProfile(@PathVariable int id) {
-        try {
-            return ResponseEntity.ok(companyProfileService.getCompany(id));
-        } catch (Exception e) {
-            return ResponseEntity.notFound().build();
-        }
+        return ResponseEntity.ok(companyProfileService.getCompany(id));
     }
 
-    @GetMapping("documents/{id}")
+    @GetMapping("/{id}/documents")
     @PreAuthorize("hasAnyRole('COMPANY_OWNER', 'AUDITOR')")
     public ResponseEntity<List<Document>> getCompanyDocuments(@PathVariable int id) {
-        try {
-            List<Document> documents = companyProfileService.getCompanyDocuments(id);
-            return ResponseEntity.ok(documents);
-        } catch (Exception e) {
-            return ResponseEntity.notFound().build();
-        }
+        List<Document> documents = companyProfileService.getCompanyDocuments(id);
+        return ResponseEntity.ok(documents);
     }
 
 }
