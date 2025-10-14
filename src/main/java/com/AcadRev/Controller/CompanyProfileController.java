@@ -16,7 +16,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CompanyProfileController {
 
-    private final CompanyProfileService companyProfileService ;
+    private final CompanyProfileService companyProfileService;
 
     @PostMapping()
     @PreAuthorize("hasAnyRole('COMPANY_OWNER')")
@@ -35,15 +35,20 @@ public class CompanyProfileController {
     public ResponseEntity<CompanyProfile> getCompanyProfile(@PathVariable int id) {
         try {
             return ResponseEntity.ok(companyProfileService.getCompany(id));
-        }catch (Exception e) {
+        } catch (Exception e) {
             return ResponseEntity.notFound().build();
         }
     }
 
-
-//    @GetMapping("documents/{id}")
-//    public ResponseEntity<List<Document>> getCompanyDocuments(@PathVariable int id){
-//
-//    }
+    @GetMapping("documents/{id}")
+    @PreAuthorize("hasAnyRole('COMPANY_OWNER', 'AUDITOR')")
+    public ResponseEntity<List<Document>> getCompanyDocuments(@PathVariable int id) {
+        try {
+            List<Document> documents = companyProfileService.getCompanyDocuments(id);
+            return ResponseEntity.ok(documents);
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
 
 }

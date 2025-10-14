@@ -2,8 +2,10 @@ package com.AcadRev.Service;
 
 import com.AcadRev.Dto.CompanyProfileDto;
 import com.AcadRev.Model.CompanyProfile;
+import com.AcadRev.Model.Document;
 import com.AcadRev.Model.User;
 import com.AcadRev.Repository.CompanyProfileRepository;
+import com.AcadRev.Repository.DocumentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -16,7 +18,8 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class CompanyProfileService {
 
-    private final CompanyProfileRepository companyProfileRepository ;
+    private final CompanyProfileRepository companyProfileRepository;
+    private final DocumentRepository documentRepository;
 
     public CompanyProfile createProfile(CompanyProfileDto companyProfile) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -38,7 +41,6 @@ public class CompanyProfileService {
         return companyProfileRepository.findAll();
     }
 
-
     public CompanyProfile getCompany(int id) {
         Optional<CompanyProfile> profileOpt = companyProfileRepository.findById(id);
         if (profileOpt == null) {
@@ -47,5 +49,13 @@ public class CompanyProfileService {
         return profileOpt.get();
     }
 
+    public List<Document> getCompanyDocuments(int companyId) {
+        // Verify company exists
+        companyProfileRepository.findById(companyId)
+                .orElseThrow(() -> new RuntimeException("Company not found with ID: " + companyId));
+
+        // Return all documents for this company
+        return documentRepository.findByCompany_Id(companyId);
+    }
 
 }
