@@ -1,5 +1,5 @@
 package com.AcadRev.Model;
 
 public enum UserType {
-    COMPANY , AUDITOR , ADMIN
+    COMPANY_OWNER , AUDITOR , ADMIN
 }
