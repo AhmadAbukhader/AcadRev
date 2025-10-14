@@ -30,7 +30,7 @@ public class DocumentService {
         User companyOwner = (User) auth.getPrincipal();
 
         if (company.getUser().getId() != companyOwner.getId()) {
-            new RuntimeException("You are not the owner of this company");
+            throw new RuntimeException("You are not the owner of this company");
         }
 
         Document document = Document.builder()

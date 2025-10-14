@@ -27,8 +27,7 @@ public class Document {
     @Column(name = "file_name", nullable = false)
     private String fileName;
 
-    @Lob
-    @Column(name = "file_data", nullable = false)
+    @Column(name = "file_data", nullable = false, columnDefinition = "bytea")
     private byte[] fileData;
 
     @Column(name = "file_type")
@@ -37,6 +36,7 @@ public class Document {
     @Column(name = "document_type")
     private String documentType;
 
+    @Builder.Default
     @Column(name = "uploaded_at", nullable = false)
     private LocalDateTime uploadedAt = LocalDateTime.now();
 
