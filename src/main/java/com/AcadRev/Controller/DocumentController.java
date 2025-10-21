@@ -1,5 +1,7 @@
 package com.AcadRev.Controller;
 
+import com.AcadRev.Dto.DocumentMetadataDto;
+import com.AcadRev.Dto.UpdateDocumentDto;
 import com.AcadRev.Model.Document;
 import com.AcadRev.Service.DocumentService;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +41,30 @@ public class DocumentController {
                 .contentType(MediaType.parseMediaType(document.getFileType()))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + document.getFileName() + "\"")
                 .body(document.getFileData());
+    }
+
+    // test
+
+    @GetMapping("/metadata/{id}")
+    @PreAuthorize("hasAnyRole('COMPANY_OWNER', 'AUDITOR')")
+    public ResponseEntity<DocumentMetadataDto> getDocumentMetadata(@PathVariable int id) {
+        DocumentMetadataDto metadata = documentService.getDocumentMetadata(id);
+        return ResponseEntity.ok(metadata);
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('COMPANY_OWNER')")
+    public ResponseEntity<DocumentMetadataDto> updateDocument(@PathVariable int id,
+            @RequestBody UpdateDocumentDto updateDocumentDto) {
+        DocumentMetadataDto updatedDocument = documentService.updateDocument(id, updateDocumentDto);
+        return ResponseEntity.ok(updatedDocument);
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('COMPANY_OWNER')")
+    public ResponseEntity<Void> deleteDocument(@PathVariable int id) {
+        documentService.deleteDocument(id);
+        return ResponseEntity.noContent().build();
     }
 
 }

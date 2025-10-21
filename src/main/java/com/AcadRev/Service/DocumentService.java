@@ -1,5 +1,7 @@
 package com.AcadRev.Service;
 
+import com.AcadRev.Dto.DocumentMetadataDto;
+import com.AcadRev.Dto.UpdateDocumentDto;
 import com.AcadRev.Exception.ResourceNotFoundException;
 import com.AcadRev.Exception.UnauthorizedAccessException;
 import com.AcadRev.Model.CompanyProfile;
@@ -55,6 +57,69 @@ public class DocumentService {
             throw new ResourceNotFoundException("No documents found with name: " + name);
         }
         return documents;
+    }
+
+    public DocumentMetadataDto getDocumentMetadata(int id) {
+        Document document = documentRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Document not found with ID: " + id));
+
+        return DocumentMetadataDto.builder()
+                .id(document.getId())
+                .fileName(document.getFileName())
+                .fileType(document.getFileType())
+                .documentType(document.getDocumentType())
+                .uploadedAt(document.getUploadedAt())
+                .companyId(document.getCompany().getId())
+                .companyName(document.getCompany().getName())
+                .build();
+    }
+
+    public void deleteDocument(int id) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        User currentUser = (User) auth.getPrincipal();
+
+        Document document = documentRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Document not found with ID: " + id));
+
+        // Check if the current user is the owner of the company that owns this document
+        if (!document.getCompany().getUser().getId().equals(currentUser.getId())) {
+            throw new UnauthorizedAccessException("You are not authorized to delete this document");
+        }
+
+        documentRepository.delete(document);
+    }
+
+    public DocumentMetadataDto updateDocument(int id, UpdateDocumentDto updateDocumentDto) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        User currentUser = (User) auth.getPrincipal();
+
+        Document document = documentRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Document not found with ID: " + id));
+
+        // Check if the current user is the owner of the company that owns this document
+        if (!document.getCompany().getUser().getId().equals(currentUser.getId())) {
+            throw new UnauthorizedAccessException("You are not authorized to update this document");
+        }
+
+        // Update the document fields
+        if (updateDocumentDto.getFileName() != null && !updateDocumentDto.getFileName().trim().isEmpty()) {
+            document.setFileName(updateDocumentDto.getFileName());
+        }
+        if (updateDocumentDto.getDocumentType() != null && !updateDocumentDto.getDocumentType().trim().isEmpty()) {
+            document.setDocumentType(updateDocumentDto.getDocumentType());
+        }
+
+        Document updatedDocument = documentRepository.save(document);
+
+        return DocumentMetadataDto.builder()
+                .id(updatedDocument.getId())
+                .fileName(updatedDocument.getFileName())
+                .fileType(updatedDocument.getFileType())
+                .documentType(updatedDocument.getDocumentType())
+                .uploadedAt(updatedDocument.getUploadedAt())
+                .companyId(updatedDocument.getCompany().getId())
+                .companyName(updatedDocument.getCompany().getName())
+                .build();
     }
 
 }

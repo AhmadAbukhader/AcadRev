@@ -87,8 +87,32 @@ public class JwtService {
     }
 
     private Key getSignInKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
-        return Keys.hmacShaKeyFor(keyBytes);
+        try {
+            // try Base64 first
+            byte[] keyBytes = Decoders.BASE64.decode(secretKey);
+            return Keys.hmacShaKeyFor(keyBytes);
+        } catch (IllegalArgumentException base64Ex) {
+            // fallback: hex or raw
+            byte[] keyBytes;
+            try {
+                keyBytes = hexToBytes(secretKey);
+            } catch (Exception hexEx) {
+                keyBytes = secretKey.getBytes();
+            }
+            return Keys.hmacShaKeyFor(keyBytes);
+        }
+    }
+
+    private static byte[] hexToBytes(String hex) {
+        int len = hex.length();
+        if (len % 2 != 0)
+            throw new IllegalArgumentException("Invalid hex length");
+        byte[] data = new byte[len / 2];
+        for (int i = 0; i < len; i += 2) {
+            data[i / 2] = (byte) ((Character.digit(hex.charAt(i), 16) << 4)
+                    + Character.digit(hex.charAt(i + 1), 16));
+        }
+        return data;
     }
 
 }

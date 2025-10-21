@@ -30,7 +30,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     @Autowired
     private UserDetailsService userDetailsService;
 
-
     @Override
     protected void doFilterInternal(
             @NonNull HttpServletRequest request,
@@ -52,6 +51,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 logger.info("Illegal Argument while fetching the username !!");
             } catch (ExpiredJwtException e) {
                 logger.info("Given jwt token is expired !!");
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json");
+                response.getWriter().write("{\"error\":\"TOKEN_EXPIRED\"}");
+                return;
             } catch (MalformedJwtException e) {
                 logger.info("Some changed has done in token !! Invalid Token");
             }

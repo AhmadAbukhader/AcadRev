@@ -43,4 +43,21 @@ public class CompanyProfileController {
         return ResponseEntity.ok(documents);
     }
 
+    //test 
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('COMPANY_OWNER')")
+    public ResponseEntity<CompanyProfile> updateCompanyProfile(@PathVariable int id,
+            @RequestBody CompanyProfileDto companyProfileDto) {
+        CompanyProfile updatedProfile = companyProfileService.updateProfile(id, companyProfileDto);
+        return ResponseEntity.ok(updatedProfile);
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('COMPANY_OWNER')")
+    public ResponseEntity<Void> deleteCompanyProfile(@PathVariable int id) {
+        companyProfileService.deleteProfile(id);
+        return ResponseEntity.noContent().build();
+    }
+
 }
