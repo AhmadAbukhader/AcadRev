@@ -43,7 +43,6 @@ public class DocumentController {
                 .body(document.getFileData());
     }
 
-    // test
 
     @GetMapping("/metadata/{id}")
     @PreAuthorize("hasAnyRole('COMPANY_OWNER', 'AUDITOR')")
@@ -55,7 +54,7 @@ public class DocumentController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('COMPANY_OWNER')")
     public ResponseEntity<DocumentMetadataDto> updateDocument(@PathVariable int id,
-            @RequestBody UpdateDocumentDto updateDocumentDto) {
+                                                              @RequestBody UpdateDocumentDto updateDocumentDto) {
         DocumentMetadataDto updatedDocument = documentService.updateDocument(id, updateDocumentDto);
         return ResponseEntity.ok(updatedDocument);
     }

@@ -15,8 +15,6 @@ import java.util.List;
 public class AuditReviewController {
     private final AuditReviewService auditReviewService;
 
-    // test
-
     @PostMapping("/document/{documentId}")
     public ResponseEntity<AuditReview> reviewDocument(
             @PathVariable int documentId, @RequestParam int rating, @RequestParam String comment) {
@@ -29,13 +27,13 @@ public class AuditReviewController {
     }
 
     @GetMapping("/document/{documentId}")
-    public ResponseEntity<AuditReview> getDocumentReview(@PathVariable int documentId) {
+    public ResponseEntity<List<AuditReview>> getDocumentReviews(@PathVariable int documentId) {
         return ResponseEntity.ok(auditReviewService.getDocumentReview(documentId));
     }
 
     @PutMapping("/{reviewId}")
     public ResponseEntity<AuditReview> updateReview(@PathVariable int reviewId,
-            @RequestBody UpdateReviewDto updateReviewDto) {
+                                                    @RequestBody UpdateReviewDto updateReviewDto) {
         AuditReview updatedReview = auditReviewService.updateReview(reviewId, updateReviewDto);
         return ResponseEntity.ok(updatedReview);
     }

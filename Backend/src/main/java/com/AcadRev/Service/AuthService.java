@@ -28,10 +28,9 @@ public class AuthService {
     public SignUpResponse signUp(SignUpRequest inputUser) {
 
         Role role = roleRepository.findByRole(UserType.valueOf(inputUser.getRole()));
-        if(role == null){
+        if (role == null) {
             role = roleRepository.save(new Role(UserType.valueOf(inputUser.getRole())));
         }
-
 
         User user = User.builder()
                 .username(inputUser.getUsername())
@@ -44,25 +43,42 @@ public class AuthService {
 
         String token = jwtService.generateToken(user);
 
-        return SignUpResponse.builder().token(token).role(role).username(user.getUsername()).build();
+        SignUpResponse.UserInfo userInfo = SignUpResponse.UserInfo.builder()
+                .id(user.getId().toString())
+                .username(user.getUsername())
+                .name(user.getName())
+                .role(role.getRole().name())
+                .build();
+
+        return SignUpResponse.builder()
+                .token(token)
+                .role(role)
+                .username(user.getUsername())
+                .user(userInfo)
+                .build();
     }
 
     public LoginResponse authenticate(LoginRequest input) {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         input.getUsername(),
-                        input.getPassword()
-                )
-        );
+                        input.getPassword()));
         User user = userRepository.findByUsername(input.getUsername())
                 .orElseThrow();
         String token = jwtService.generateToken(user);
 
+        LoginResponse.UserInfo userInfo = LoginResponse.UserInfo.builder()
+                .id(user.getId().toString())
+                .username(user.getUsername())
+                .name(user.getName())
+                .role(user.getRole().getRole().name())
+                .build();
+
         return LoginResponse.builder()
                 .token(token)
                 .username(user.getUsername())
+                .user(userInfo)
                 .build();
     }
-
 
 }

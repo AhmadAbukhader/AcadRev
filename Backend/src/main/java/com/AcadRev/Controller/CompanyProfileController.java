@@ -25,8 +25,8 @@ public class CompanyProfileController {
     }
 
     @GetMapping("/all")
-    @PreAuthorize("hasAnyRole('AUDITOR')")
-    public ResponseEntity<List<CompanyProfile>> getAllCompanyProfile() {
+    @PreAuthorize("hasAnyRole('AUDITOR' , 'COMPANY_OWNER')")
+    public ResponseEntity<List<CompanyProfile>> getAllCompaniesProfile() {
         return ResponseEntity.ok(companyProfileService.getCompanies());
     }
 
@@ -43,12 +43,10 @@ public class CompanyProfileController {
         return ResponseEntity.ok(documents);
     }
 
-    //test 
-
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('COMPANY_OWNER')")
     public ResponseEntity<CompanyProfile> updateCompanyProfile(@PathVariable int id,
-            @RequestBody CompanyProfileDto companyProfileDto) {
+                                                               @RequestBody CompanyProfileDto companyProfileDto) {
         CompanyProfile updatedProfile = companyProfileService.updateProfile(id, companyProfileDto);
         return ResponseEntity.ok(updatedProfile);
     }

@@ -13,6 +13,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -35,6 +36,7 @@ public class AuditReviewService {
                 .auditor(auditor)
                 .rating(rating)
                 .comments(comment)
+                .reviewedAt(LocalDateTime.now())
                 .build();
         auditReviewRepository.save(auditReview);
         return auditReview;
@@ -43,11 +45,13 @@ public class AuditReviewService {
     public List<AuditReview> getAllCompanyReviews(int companyId) {
         return companyProfileService.getCompanyDocuments(companyId).stream()
                 .map(d -> auditReviewRepository.findByDocumentId(d.getId()))
-                .flatMap(Optional::stream)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .flatMap(List::stream)
                 .toList();
     }
 
-    public AuditReview getDocumentReview(int documentId) {
+    public List<AuditReview> getDocumentReview(int documentId) {
         return auditReviewRepository.findByDocumentId(documentId)
                 .orElseThrow(() -> new RuntimeException("Document not reviewed"));
     }
@@ -68,7 +72,7 @@ public class AuditReviewService {
         if (updateReviewDto.getRating() != null) {
             existingReview.setRating(updateReviewDto.getRating());
         }
-        if (updateReviewDto.getComments() != null && !updateReviewDto.getComments().trim().isEmpty()) {
+        if (updateReviewDto.getComments() != null ) {
             existingReview.setComments(updateReviewDto.getComments());
         }
 

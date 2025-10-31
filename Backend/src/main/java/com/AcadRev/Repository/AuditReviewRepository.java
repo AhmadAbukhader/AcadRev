@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface AuditReviewRepository extends JpaRepository<AuditReview, Integer> {
-    Optional<AuditReview> findByDocumentId(int documentId);
+    Optional<List<AuditReview>> findByDocumentId(int documentId);
 
     List<AuditReview> findByAuditorId(int auditorId);
 }
