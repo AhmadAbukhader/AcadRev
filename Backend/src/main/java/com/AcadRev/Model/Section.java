@@ -1,5 +1,6 @@
 package com.AcadRev.Model;
 
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.Data;
 
@@ -20,6 +21,7 @@ public class Section {
     private String code;
 
     // One section can have many requirements
+    @JsonManagedReference
     @OneToMany(mappedBy = "section", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Requirement> requirements;
 }

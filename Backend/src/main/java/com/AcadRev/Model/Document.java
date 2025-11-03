@@ -1,5 +1,6 @@
 package com.AcadRev.Model;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -36,7 +37,6 @@ public class Document {
     @Column(name = "document_type")
     private String documentType;
 
-
     @Builder.Default
     @Column(name = "uploaded_at", nullable = false)
     private LocalDateTime uploadedAt = LocalDateTime.now();
@@ -45,9 +45,9 @@ public class Document {
     @JoinColumn(name = "section_id")
     private Section section;
 
+    @JsonBackReference
     @ManyToOne
     @JoinColumn(name = "requirement_id")
     private Requirement requirement;
-
 
 }
