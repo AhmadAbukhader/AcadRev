@@ -16,9 +16,10 @@ public class Section {
     @Column(nullable = false)
     private String name;
 
+    @Column(name = "code")
+    private String code;
+
     // One section can have many requirements
     @OneToMany(mappedBy = "section", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Requirement> requirements;
 }
-
-

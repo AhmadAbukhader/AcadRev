@@ -19,4 +19,7 @@ public class DocumentMetadataDto {
     private LocalDateTime uploadedAt;
     private Integer companyId;
     private String companyName;
+    private Integer sectionId;
+    private String sectionName;
+    private String sectionCode;
 }

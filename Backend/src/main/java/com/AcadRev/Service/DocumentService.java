@@ -98,6 +98,9 @@ public class DocumentService {
                 .uploadedAt(document.getUploadedAt())
                 .companyId(document.getCompany().getId())
                 .companyName(document.getCompany().getName())
+                .sectionId(document.getSection() != null ? document.getSection().getId() : null)
+                .sectionName(document.getSection() != null ? document.getSection().getName() : null)
+                .sectionCode(document.getSection() != null ? document.getSection().getCode() : null)
                 .build();
     }
 
