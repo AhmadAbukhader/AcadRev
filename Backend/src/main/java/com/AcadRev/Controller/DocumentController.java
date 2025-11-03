@@ -26,9 +26,11 @@ public class DocumentController {
     public ResponseEntity<String> uploadFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam("companyId") int companyId,
-            @RequestParam("documentType") String documentType) throws IOException {
+            @RequestParam("documentType") String documentType,
+            @RequestParam(value = "sectionId", required = false) Integer sectionId,
+            @RequestParam(value = "requirementId", required = false) Integer requirementId) throws IOException {
 
-        documentService.uploadDocument(file, companyId, documentType);
+        documentService.uploadDocument(file, companyId, documentType, sectionId, requirementId);
         return ResponseEntity.ok("File uploaded successfully!");
     }
 
@@ -46,7 +48,6 @@ public class DocumentController {
                 .body(document.getFileData());
     }
 
-
     @GetMapping("/metadata/{id}")
     @PreAuthorize("hasAnyRole('COMPANY_OWNER', 'AUDITOR')")
     public ResponseEntity<DocumentMetadataDto> getDocumentMetadata(@PathVariable int id) {
@@ -57,7 +58,7 @@ public class DocumentController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('COMPANY_OWNER')")
     public ResponseEntity<DocumentMetadataDto> updateDocument(@PathVariable int id,
-                                                              @RequestBody UpdateDocumentDto updateDocumentDto) {
+            @RequestBody UpdateDocumentDto updateDocumentDto) {
         DocumentMetadataDto updatedDocument = documentService.updateDocument(id, updateDocumentDto);
         return ResponseEntity.ok(updatedDocument);
     }

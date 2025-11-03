@@ -9,5 +9,8 @@ import java.util.List;
 @Repository
 public interface DocumentRepository extends JpaRepository<Document, Integer> {
     List<Document> findByCompany_Id(int companyId);
+
     List<Document> findByFileName(String name);
+
+    List<Document> findByRequirement_Id(int requirementId);
 }

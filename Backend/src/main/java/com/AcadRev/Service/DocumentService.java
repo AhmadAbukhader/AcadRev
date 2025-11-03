@@ -7,8 +7,12 @@ import com.AcadRev.Exception.UnauthorizedAccessException;
 import com.AcadRev.Model.CompanyProfile;
 import com.AcadRev.Model.Document;
 import com.AcadRev.Model.User;
+import com.AcadRev.Model.Section;
+import com.AcadRev.Model.Requirement;
 import com.AcadRev.Repository.CompanyProfileRepository;
 import com.AcadRev.Repository.DocumentRepository;
+import com.AcadRev.Repository.SectionRepository;
+import com.AcadRev.Repository.RequirementRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -23,8 +27,11 @@ import java.util.List;
 public class DocumentService {
     private final DocumentRepository documentRepository;
     private final CompanyProfileRepository companyProfileRepository;
+    private final SectionRepository sectionRepository;
+    private final RequirementRepository requirementRepository;
 
-    public Document uploadDocument(MultipartFile file, int companyId, String documentType) throws IOException {
+    public Document uploadDocument(MultipartFile file, int companyId, String documentType, Integer sectionId,
+            Integer requirementId) throws IOException {
         CompanyProfile company = companyProfileRepository.findById(companyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Company not found with ID: " + companyId));
 
@@ -35,12 +42,32 @@ public class DocumentService {
             throw new UnauthorizedAccessException("You are not the owner of this company");
         }
 
+        Section section = null;
+        Requirement requirement = null;
+
+        if (sectionId != null) {
+            section = sectionRepository.findById(sectionId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Section not found with ID: " + sectionId));
+        }
+        if (requirementId != null) {
+            requirement = requirementRepository.findById(requirementId)
+                    .orElseThrow(
+                            () -> new ResourceNotFoundException("Requirement not found with ID: " + requirementId));
+        }
+        // If both provided, ensure requirement belongs to section
+        if (section != null && requirement != null && requirement.getSection() != null
+                && requirement.getSection().getId() != section.getId()) {
+            throw new IllegalArgumentException("Requirement does not belong to the provided section");
+        }
+
         Document document = Document.builder()
                 .company(company)
                 .fileName(file.getOriginalFilename())
                 .fileData(file.getBytes())
                 .fileType(file.getContentType())
                 .documentType(documentType)
+                .section(section)
+                .requirement(requirement)
                 .build();
 
         return documentRepository.save(document);
