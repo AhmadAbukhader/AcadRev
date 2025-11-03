@@ -36,8 +36,18 @@ public class Document {
     @Column(name = "document_type")
     private String documentType;
 
+
     @Builder.Default
     @Column(name = "uploaded_at", nullable = false)
     private LocalDateTime uploadedAt = LocalDateTime.now();
+
+    @ManyToOne
+    @JoinColumn(name = "section_id")
+    private Section section;
+
+    @ManyToOne
+    @JoinColumn(name = "requirement_id")
+    private Requirement requirement;
+
 
 }

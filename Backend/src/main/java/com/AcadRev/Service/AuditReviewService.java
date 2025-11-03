@@ -24,7 +24,7 @@ public class AuditReviewService {
     private final DocumentRepository documentRepository;
     private final CompanyProfileService companyProfileService;
 
-    public AuditReview reviewDocument(int documentId, int rating, String comment) {
+    public AuditReview reviewDocument(int documentId, String rating, String comment) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         User auditor = (User) auth.getPrincipal();
 

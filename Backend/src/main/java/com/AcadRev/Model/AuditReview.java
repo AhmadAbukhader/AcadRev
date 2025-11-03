@@ -30,7 +30,7 @@ public class AuditReview {
     private User auditor;
 
     @Column(nullable = false)
-    private Integer rating;
+    private String rating;
 
     private String comments;
 

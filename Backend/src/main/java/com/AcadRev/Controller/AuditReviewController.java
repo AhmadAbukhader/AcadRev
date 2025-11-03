@@ -17,7 +17,7 @@ public class AuditReviewController {
 
     @PostMapping("/document/{documentId}")
     public ResponseEntity<AuditReview> reviewDocument(
-            @PathVariable int documentId, @RequestParam int rating, @RequestParam String comment) {
+            @PathVariable int documentId, @RequestParam String rating, @RequestParam String comment) {
         return ResponseEntity.ok(auditReviewService.reviewDocument(documentId, rating, comment));
     }
 

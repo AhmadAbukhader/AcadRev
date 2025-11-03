@@ -10,6 +10,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class UpdateReviewDto {
-    private Integer rating;
+    private String rating;
     private String comments;
 }

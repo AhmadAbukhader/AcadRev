@@ -34,12 +34,15 @@ public class DocumentController {
 
     @GetMapping("/download/{id}")
     @PreAuthorize("hasAnyRole('COMPANY_OWNER', 'AUDITOR')")
-    public ResponseEntity<byte[]> downloadFile(@PathVariable int id) {
+    public ResponseEntity<byte[]> viewFile(@PathVariable int id) {
         Document document = documentService.getDocumentById(id);
 
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(document.getFileType()))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + document.getFileName() + "\"")
+                .contentType(MediaType.parseMediaType(document.getFileType() != null
+                        ? document.getFileType()
+                        : "application/pdf"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "inline; filename=\"" + document.getFileName() + "\"")
                 .body(document.getFileData());
     }
 
