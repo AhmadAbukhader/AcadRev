@@ -24,9 +24,12 @@ public class Requirement {
     @JoinColumn(name = "section_id", nullable = false)
     private Section section;
 
-    // Optional: If you want to see which documents belong to this requirement
     @JsonManagedReference
     @OneToMany(mappedBy = "requirement", cascade = CascadeType.ALL)
     private List<Document> documents;
+
+    public Integer getSectionId() {
+        return section != null ? section.getId() : null;
+    }
 
 }
