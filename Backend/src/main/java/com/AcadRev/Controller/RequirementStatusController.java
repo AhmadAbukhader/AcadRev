@@ -14,7 +14,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class RequirementStatusController {
 
-    private RequirementStatusService requirementStatusService;
+    private final RequirementStatusService requirementStatusService;
 
     @GetMapping()
     public ResponseEntity<List<RequirementStatus>> getAllUserRequirementStatus(){
@@ -23,12 +23,7 @@ public class RequirementStatusController {
 
     @PutMapping("/{requirementId}")
     public ResponseEntity<String> updateRequirementStatus(@PathVariable int requirementId, @RequestParam int status){
-        return ResponseEntity.ok(requirementStatusService.updateStatus(requirementId , status));
-    }
-
-    @PostMapping("/{requirementId}")
-    public ResponseEntity<String> createRequirementStatus(@PathVariable int requirementId, @RequestParam int status){
-        return ResponseEntity.ok(requirementStatusService.createStatus(requirementId , status));
+        return ResponseEntity.ok(requirementStatusService.upsertStatus(requirementId , status));
     }
 
     @GetMapping("/progress")

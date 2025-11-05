@@ -11,56 +11,114 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class RequirementStatusService {
-    private  RequirementStatusRepository requirementStatusRepository;
-    private RequirementRepository requirementRepository;
+    private final RequirementStatusRepository requirementStatusRepository;
+    private final RequirementRepository requirementRepository;
 
 
-    public List<RequirementStatus> getStatuses(){
+    public List<RequirementStatus> getStatuses() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         User companyOwner = (User) auth.getPrincipal();
 
-        return requirementStatusRepository.findByUserId(companyOwner.getId());
-    }
+        List<RequirementStatus> requirementStatusList =
+                requirementStatusRepository.findByUserId(companyOwner.getId());
 
-    public String updateStatus(int requirementId , int status){
-        RequirementStatus requirementStatus = requirementStatusRepository.findById(requirementId)
-                .orElseThrow(() -> new ResourceNotFoundException("Requirement not found with ID: " + requirementId));
-        requirementStatus.setStatus(status);
-        requirementStatusRepository.save(requirementStatus);
-        return "Status updated successfully";
+        // If the user has no statuses yet, return default values in memory
+        if (requirementStatusList.isEmpty()) {
+            List<RequirementStatus> defaultStatuses = new ArrayList<>();
+
+            // Example: assume you want one default status per requirement
+            List<Requirement> allRequirements = requirementRepository.findAll();
+
+            for (Requirement req : allRequirements) {
+                RequirementStatus defaultStatus = RequirementStatus.builder()
+                        .requirement(req)
+                        .user(companyOwner)
+                        .status(0) // Default value, not saved to DB
+                        .build();
+
+                defaultStatuses.add(defaultStatus);
+            }
+
+            return defaultStatuses; // return in-memory defaults
+        }
+
+        return requirementStatusList;
     }
-    public String createStatus(int requirementId , int status){
+    public String upsertStatus(int requirementId, int status) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         User companyOwner = (User) auth.getPrincipal();
 
+        // 1. Find the requirement
         Requirement requirement = requirementRepository.findById(requirementId)
-                .orElseThrow(() -> new ResourceNotFoundException("Requirement not found with ID: " + requirementId));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Requirement not found with ID: " + requirementId));
 
-        RequirementStatus requirementStatus = RequirementStatus.builder()
-                .user(companyOwner)
-                .status(status)
-                .requirement(requirement)
-                .build();
+        // 2. Find existing status for this user and requirement
+        RequirementStatus requirementStatus =
+                requirementStatusRepository.findByRequirementIdAndUserId(requirementId, companyOwner.getId())
+                        .orElseGet(() ->
+                                // Create a new in-memory RequirementStatus if it doesn't exist
+                                RequirementStatus.builder()
+                                        .requirement(requirement)
+                                        .user(companyOwner)
+                                        .build()
+                        );
 
+        // 3. Set the status value
+        requirementStatus.setStatus(status);
+
+        // 4. Save (insert or update)
         requirementStatusRepository.save(requirementStatus);
-        return "Status created successfully";
+
+        return "Status saved successfully";
     }
 
-    public int getStatusProgress(){
+    public int getStatusProgress() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         User companyOwner = (User) auth.getPrincipal();
 
-        List<RequirementStatus> requirementStatuses = requirementStatusRepository.findByUserId(companyOwner.getId());
+        // Fetch existing statuses for this user
+        List<RequirementStatus> existingStatuses =
+                requirementStatusRepository.findByUserId(companyOwner.getId());
 
-        int totalIdSum = requirementStatuses.stream()
+        // Fetch all requirements
+        List<Requirement> allRequirements = requirementRepository.findAll();
+
+        // Build a complete list: existing statuses + in-memory defaults for missing requirements
+        Map<Integer, RequirementStatus> statusMap = existingStatuses.stream()
+                .collect(Collectors.toMap(
+                        rs -> rs.getRequirement().getId(),
+                        rs -> rs
+                ));
+
+        List<RequirementStatus> completeStatuses = allRequirements.stream()
+                .map(req -> statusMap.getOrDefault(
+                        req.getId(),
+                        RequirementStatus.builder()
+                                .requirement(req)
+                                .user(companyOwner)
+                                .status(0) // default
+                                .build()
+                ))
+                .toList();
+
+        // Sum the status values
+        int totalStatusSum = completeStatuses.stream()
                 .mapToInt(RequirementStatus::getStatus)
                 .sum();
-        int progress = (int) totalIdSum/124 ;
+
+        // Calculate progress: assume max status per requirement is 1 (adjust if needed)
+        int numberOfRequirements = completeStatuses.size();
+        int progress = numberOfRequirements > 0 ? (int) ((totalStatusSum * 100.0) / numberOfRequirements) : 0;
+
         return progress;
     }
 }

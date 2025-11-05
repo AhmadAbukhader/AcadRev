@@ -1,5 +1,6 @@
 package com.AcadRev.Model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,11 +23,12 @@ public class RequirementStatus {
     private Requirement requirement;
 
     @ManyToOne
+    @JsonIgnore
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(name = "status", nullable = false)
-    private int status;
+    @Column(name = "status", nullable = false, columnDefinition = "INTEGER DEFAULT 0")
+    private int status = 0;
 
 
 }
