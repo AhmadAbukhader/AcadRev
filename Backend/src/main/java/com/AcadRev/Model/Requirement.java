@@ -1,6 +1,7 @@
 package com.AcadRev.Model;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.Data;
@@ -24,7 +25,7 @@ public class Requirement {
     @JoinColumn(name = "section_id", nullable = false)
     private Section section;
 
-    @JsonManagedReference
+    @JsonIgnore
     @OneToMany(mappedBy = "requirement", cascade = CascadeType.ALL)
     private List<Document> documents;
 

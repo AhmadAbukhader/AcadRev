@@ -17,13 +17,11 @@ public class SectionController {
     private final SectionService sectionService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('COMPANY_OWNER', 'AUDITOR')")
     public List<Section> getAllSections() {
         return sectionService.getAllSections();
     }
 
     @GetMapping("/{sectionId}/requirements")
-    @PreAuthorize("hasAnyRole('COMPANY_OWNER', 'AUDITOR')")
     public List<Requirement> getRequirementsBySection(@PathVariable int sectionId) {
         return sectionService.getRequirementsBySectionId(sectionId);
     }

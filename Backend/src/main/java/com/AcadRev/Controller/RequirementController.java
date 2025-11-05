@@ -17,7 +17,6 @@ public class RequirementController {
     private final RequirementService requirementService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('COMPANY_OWNER', 'AUDITOR')")
     public List<Requirement> getAllRequirements() {
         return requirementService.getAllRequirements();
     }
