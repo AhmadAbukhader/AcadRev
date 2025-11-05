@@ -26,4 +26,5 @@ public class RequirementController {
     public List<Document> getDocumentsByRequirement(@PathVariable int requirementId) {
         return requirementService.getDocumentsByRequirementId(requirementId);
     }
+
 }

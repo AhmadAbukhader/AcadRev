@@ -21,7 +21,6 @@ public class AuthController {
     private final JwtService jwtService;
     private final AuthService authService;
 
-
     @PostMapping("/signup")
     public ResponseEntity<SignUpResponse> signUp (@RequestBody SignUpRequest request){
         try{
