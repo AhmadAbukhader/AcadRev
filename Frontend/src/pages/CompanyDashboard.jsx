@@ -272,7 +272,6 @@ export default function CompanyDashboard() {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">Company Dashboard</h1>
-                <p className="text-sm text-gray-600">Company ID: {companyId}</p>
               </div>
             </div>
             <button

@@ -93,15 +93,15 @@ export default function Login() {
                             <div className="inline-flex items-center gap-3 bg-white/80 backdrop-blur-sm px-6 py-3 rounded-full shadow-lg">
                                 <FileCheck className="w-8 h-8 text-indigo-600" />
                                 <span className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                                    AcadRev
+                                    Quality Management System
                                 </span>
                             </div>
 
                             <h1 className="text-5xl font-bold text-gray-900 leading-tight">
-                                Document Management
+                                Development
                                 <br />
                                 <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                                    & Audit System
+                                    & Auditing System
                                 </span>
                             </h1>
 
