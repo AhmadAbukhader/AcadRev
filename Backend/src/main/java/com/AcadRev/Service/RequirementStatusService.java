@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class RequirementStatusService {
+
     private final RequirementStatusRepository requirementStatusRepository;
     private final RequirementRepository requirementRepository;
 
@@ -110,12 +111,10 @@ public class RequirementStatusService {
                 ))
                 .toList();
 
-        // Sum the status values
         int totalStatusSum = completeStatuses.stream()
                 .mapToInt(RequirementStatus::getStatus)
                 .sum();
 
-        // Calculate progress: assume max status per requirement is 1 (adjust if needed)
         int numberOfRequirements = completeStatuses.size();
         int progress = numberOfRequirements > 0 ? (int) ((totalStatusSum * 100.0) / numberOfRequirements) : 0;
 

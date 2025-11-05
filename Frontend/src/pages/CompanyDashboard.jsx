@@ -21,13 +21,14 @@ import {
   FileSpreadsheet,
   FileType,
 } from "lucide-react"
-import { uploadFile, downloadFile, createCompanyProfile, getCurrentUserCompany, getAllSections, getAllRequirements, getRequirementDocuments } from "../lib/company-api"
+import { getMyDocuments, uploadFile, downloadFile, createCompanyProfile, getCompanyReviews, getCurrentUserCompany, getDocumentReviews, getAllSections, getAllRequirements, getRequirementDocuments, getRequirementStatuses, updateRequirementStatus, getRequirementStatusProgress } from "../lib/company-api"
 import RequirementsTabs from "../components/RequirementsTabs"
 
 export default function CompanyDashboard() {
   const navigate = useNavigate()
   const [profile, setProfile] = useState(null)
-  // Removed unused company reviews state
+  const [documents, setDocuments] = useState([])
+  const [reviews, setReviews] = useState([])
   const [loading, setLoading] = useState(true)
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -50,7 +51,9 @@ export default function CompanyDashboard() {
     phone: "",
   })
 
-  // Removed unused reviews modal state
+  const [reviewsModalOpen, setReviewsModalOpen] = useState(false)
+  const [selectedDocumentForReviews, setSelectedDocumentForReviews] = useState(null)
+  const [documentReviews, setDocumentReviews] = useState([])
   const [toast, setToast] = useState(null)
   const [selectedISO, setSelectedISO] = useState("ISO 9001")
   const [sections, setSections] = useState([])
@@ -58,6 +61,8 @@ export default function CompanyDashboard() {
   const [selectedRequirement, setSelectedRequirement] = useState(null)
   const [selectedSection, setSelectedSection] = useState(null)
   const [refreshRequirementId, setRefreshRequirementId] = useState(null)
+  const [requirementStatuses, setRequirementStatuses] = useState([])
+  const [statusProgress, setStatusProgress] = useState(0)
 
   useEffect(() => {
     const checkCompanyAndLoad = async () => {
@@ -78,7 +83,7 @@ export default function CompanyDashboard() {
         setCompanyId(companyId)
         setProfile(userCompany)
         localStorage.setItem("companyId", companyId)
-        await fetchCompanyData()
+        await fetchCompanyData(companyId)
       } catch {
         // User doesn't have a company or can't check - show create form
         setShowCreateProfile(true)
@@ -100,7 +105,7 @@ export default function CompanyDashboard() {
       setCompanyId(newProfile.id.toString())
       setProfile(newProfile)
       setShowCreateProfile(false)
-      await fetchCompanyData()
+      await fetchCompanyData(newProfile.id.toString())
     } catch (err) {
       setError(err.message)
     } finally {
@@ -113,10 +118,15 @@ export default function CompanyDashboard() {
     setTimeout(() => setToast(null), 3000)
   }
 
-  const fetchCompanyData = async () => {
+  const fetchCompanyData = async (companyId) => {
     try {
-      // Fetch sections and requirements in parallel
-      const [sectionsData, requirementsData] = await Promise.all([
+      // Fetch documents, reviews, sections, requirements, statuses, and progress in parallel
+      const [docsData, reviewsData, sectionsData, requirementsData, statusesData, progressData] = await Promise.all([
+        getMyDocuments(companyId),
+        getCompanyReviews(companyId).catch((err) => {
+          console.warn("Failed to load reviews:", err)
+          return []
+        }),
         getAllSections().catch((err) => {
           console.error("Failed to load sections:", err)
           return []
@@ -124,26 +134,27 @@ export default function CompanyDashboard() {
         getAllRequirements().catch((err) => {
           console.error("Failed to load requirements:", err)
           return []
+        }),
+        getRequirementStatuses().catch((err) => {
+          console.error("Failed to load requirement statuses:", err)
+          return []
+        }),
+        getRequirementStatusProgress().catch((err) => {
+          console.error("Failed to load progress:", err)
+          return 0
         })
       ])
 
-      // Normalize potential paginated responses to plain arrays
-      const normalizedSections = Array.isArray(sectionsData)
-        ? sectionsData
-        : (sectionsData && Array.isArray(sectionsData.content))
-          ? sectionsData.content
-          : []
-      const normalizedRequirements = Array.isArray(requirementsData)
-        ? requirementsData
-        : (requirementsData && Array.isArray(requirementsData.content))
-          ? requirementsData.content
-          : []
+      console.log("Fetched sections:", sectionsData)
+      console.log("Fetched requirements:", requirementsData)
+      console.log("Fetched requirement statuses:", statusesData)
 
-      console.log("Fetched sections (normalized):", normalizedSections)
-      console.log("Fetched requirements (normalized):", normalizedRequirements)
-
-      setSections(normalizedSections)
-      setRequirements(normalizedRequirements)
+      setDocuments(docsData)
+      setReviews(reviewsData)
+      setSections(sectionsData)
+      setRequirements(requirementsData)
+      setRequirementStatuses(statusesData)
+      setStatusProgress(progressData)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -151,7 +162,19 @@ export default function CompanyDashboard() {
     }
   }
 
-  // Removed unused handleViewReviews
+  const handleViewReviews = async (document) => {
+    setSelectedDocumentForReviews(document)
+    setReviewsModalOpen(true)
+
+    try {
+      // Fetch reviews for this document from the API
+      const docReviews = await getDocumentReviews(document.id)
+      setDocumentReviews(docReviews)
+    } catch (error) {
+      console.error("Error fetching reviews:", error)
+      setDocumentReviews([])
+    }
+  }
 
   const handleUpload = async (e) => {
     e.preventDefault()
@@ -208,7 +231,7 @@ export default function CompanyDashboard() {
 
       setSelectedRequirement(null)
       setSelectedSection(null)
-      fetchCompanyData()
+      fetchCompanyData(companyId)
     } catch (err) {
       console.error("Upload error:", err)
       setError(err.message)
@@ -240,9 +263,27 @@ export default function CompanyDashboard() {
     }
   }
 
-  // Removed unused getReviewsForDocument
+  const getReviewsForDocument = (documentId) => {
+    return reviews.filter(review => review.document.id === documentId)
+  }
 
-  // Removed unused getFileIcon
+  const getFileIcon = (fileType) => {
+    if (!fileType) return { Icon: FileText, color: "text-gray-600", bgColor: "bg-gray-100" }
+
+    const type = fileType.toLowerCase()
+
+    if (type.includes("pdf")) {
+      return { Icon: FileText, color: "text-red-600", bgColor: "bg-red-100" }
+    } else if (type.includes("word") || type.includes("doc")) {
+      return { Icon: FileType, color: "text-blue-600", bgColor: "bg-blue-100" }
+    } else if (type.includes("excel") || type.includes("spreadsheet") || type.includes("xls") || type.includes("csv")) {
+      return { Icon: FileSpreadsheet, color: "text-green-600", bgColor: "bg-green-100" }
+    } else if (type.includes("image") || type.includes("jpg") || type.includes("jpeg") || type.includes("png") || type.includes("gif")) {
+      return { Icon: ImageIcon, color: "text-purple-600", bgColor: "bg-purple-100" }
+    } else {
+      return { Icon: File, color: "text-gray-600", bgColor: "bg-gray-100" }
+    }
+  }
 
   const handleLogout = () => {
     localStorage.clear()
@@ -272,6 +313,7 @@ export default function CompanyDashboard() {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">Company Dashboard</h1>
+                <p className="text-sm text-gray-600">Company ID: {companyId}</p>
               </div>
             </div>
             <button
@@ -302,6 +344,14 @@ export default function CompanyDashboard() {
               </select>
               {selectedISO !== "ISO 9001" && (
                 <span className="text-sm text-orange-600 font-medium">Coming Soon</span>
+              )}
+              {selectedISO === "ISO 9001" && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 rounded-lg border border-indigo-200">
+                  <div className="w-2 h-2 bg-indigo-600 rounded-full animate-pulse"></div>
+                  <span className="text-sm font-medium text-indigo-700">
+                    Progress: {statusProgress}%
+                  </span>
+                </div>
               )}
             </div>
           </div>
@@ -424,8 +474,8 @@ export default function CompanyDashboard() {
                   </div>
                 </div>
 
-                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="w-5 h-5 text-indigo-600 mt-1" />
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                  <Building2 className="w-5 h-5 text-indigo-600" />
                   <div>
                     <p className="text-xs text-gray-500">Industry</p>
                     <p className="font-semibold text-gray-900">{profile.industry || "Not provided"}</p>
@@ -444,13 +494,7 @@ export default function CompanyDashboard() {
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">Requirements & Documents</h2>
                 <p className="text-gray-600">Manage documents by ISO 9001 requirements</p>
               </div>
-              <button
-                onClick={() => handleUploadClick()}
-                className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-3 rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 shadow-lg"
-              >
-                <Upload className="w-5 h-5" />
-                Quick Upload
-              </button>
+
             </div>
 
             <RequirementsTabs
@@ -462,6 +506,23 @@ export default function CompanyDashboard() {
               onDownload={handleDownload}
               getRequirementDocuments={getRequirementDocuments}
               refreshRequirementId={refreshRequirementId}
+              requirementStatuses={requirementStatuses}
+              onUpdateStatus={async (requirementId, status) => {
+                try {
+                  await updateRequirementStatus(requirementId, status)
+                  // Refresh statuses and progress
+                  const [statusesData, progressData] = await Promise.all([
+                    getRequirementStatuses(),
+                    getRequirementStatusProgress()
+                  ])
+                  setRequirementStatuses(statusesData)
+                  setStatusProgress(progressData)
+                  showToast("Status updated successfully!")
+                } catch (err) {
+                  showToast("Failed to update status: " + err.message, "error")
+                  throw err
+                }
+              }}
             />
           </div>
         ) : (
@@ -575,7 +636,74 @@ export default function CompanyDashboard() {
         </div>
       )}
 
-      {/* Reviews Modal removed (unused) */}
+      {/* Reviews Modal */}
+      {reviewsModalOpen && selectedDocumentForReviews && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col animate-scale-in">
+            <div className="flex items-center justify-between p-6 border-b">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Document Reviews</h3>
+                <p className="text-sm text-gray-600 mt-1">{selectedDocumentForReviews.fileName}</p>
+              </div>
+              <button
+                onClick={() => setReviewsModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {documentReviews.length === 0 ? (
+                <div className="text-center py-12">
+                  <Star className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500 text-lg">No reviews yet</p>
+                  <p className="text-gray-400 text-sm">This document hasn't been reviewed by any auditors yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {documentReviews.map((review, index) => (
+                    <div
+                      key={index}
+                      className="border border-gray-200 rounded-lg p-4 hover:border-indigo-300 transition-colors"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="font-semibold text-gray-900">
+                              {review.auditor?.name || review.auditor?.username || "Anonymous Auditor"}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              • {new Date(review.reviewedAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`px-3 py-1 rounded-full text-sm font-medium ${review.rating === "ACCEPTED"
+                                ? "bg-green-100 text-green-800"
+                                : review.rating === "REJECTED"
+                                  ? "bg-red-100 text-red-800"
+                                  : "bg-orange-100 text-orange-800"
+                                }`}
+                            >
+                              {review.rating}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      {review.comments && (
+                        <p className="text-gray-700 text-sm bg-gray-50 p-3 rounded-lg">
+                          {review.comments}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notification */}
       {toast && (

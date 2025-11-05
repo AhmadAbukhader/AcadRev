@@ -172,3 +172,21 @@ export const getRequirementDocuments = async (requirementId, companyId = null) =
 
     return documents
 }
+
+// Requirement Status API
+export const getRequirementStatuses = async () => {
+    const response = await api.get("/api/v1/requirements-status")
+    return response.data || []
+}
+
+export const updateRequirementStatus = async (requirementId, status) => {
+    const response = await api.put(`/api/v1/requirements-status/${requirementId}`, null, {
+        params: { status }
+    })
+    return response.data
+}
+
+export const getRequirementStatusProgress = async () => {
+    const response = await api.get("/api/v1/requirements-status/progress")
+    return response.data || 0
+}

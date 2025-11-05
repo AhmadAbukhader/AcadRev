@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import {
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   Upload,
   Download,
   FileText,
@@ -27,7 +28,9 @@ export default function RequirementsTabs({
   onDownload,
   onReview,
   getRequirementDocuments,
-  refreshRequirementId = null // When this changes, refresh that requirement's documents
+  refreshRequirementId = null, // When this changes, refresh that requirement's documents
+  requirementStatuses = [], // Array of requirement status objects
+  onUpdateStatus = null // Function to update requirement status
 }) {
   const [activeSection, setActiveSection] = useState(null)
   const [expandedSections, setExpandedSections] = useState(new Set())
@@ -45,6 +48,7 @@ export default function RequirementsTabs({
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false)
   const [currentAuditorId, setCurrentAuditorId] = useState(null)
   const [expandedReviewDocs, setExpandedReviewDocs] = useState(new Set()) // Track which documents have reviews expanded (company view)
+  const [statusDropdowns, setStatusDropdowns] = useState({}) // Track which requirement status dropdowns are open
 
   // Get current auditor ID
   useEffect(() => {
@@ -53,6 +57,22 @@ export default function RequirementsTabs({
       setCurrentAuditorId(userId ? parseInt(userId) : null)
     }
   }, [isAuditor])
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (Object.keys(statusDropdowns).length > 0) {
+        const isClickInsideDropdown = event.target.closest('.status-dropdown-container')
+        if (!isClickInsideDropdown) {
+          setStatusDropdowns({})
+        }
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [statusDropdowns])
 
   // Refresh documents when refreshRequirementId changes (after upload)
   useEffect(() => {
@@ -273,6 +293,49 @@ export default function RequirementsTabs({
       }
       return next
     })
+  }
+
+  // Get status for a requirement (defaults to 0 if not found)
+  const getRequirementStatus = (requirementId) => {
+    const statusObj = requirementStatuses.find(s => s.requirement?.id === requirementId)
+    return statusObj ? statusObj.status : 0
+  }
+
+  // Get status label and color
+  const getStatusLabel = (status) => {
+    switch (status) {
+      case 0:
+        return { label: "No", color: "bg-red-100 text-red-700 border-red-300", iconColor: "text-red-600" }
+      case 1:
+        return { label: "TSE", color: "bg-orange-100 text-orange-700 border-orange-300", iconColor: "text-orange-600" }
+      case 2:
+        return { label: "Yes", color: "bg-green-100 text-green-700 border-green-300", iconColor: "text-green-600" }
+      default:
+        return { label: "No", color: "bg-red-100 text-red-700 border-red-300", iconColor: "text-red-600" }
+    }
+  }
+
+  // Toggle status dropdown
+  const toggleStatusDropdown = (requirementId) => {
+    if (isAuditor || !onUpdateStatus) return
+    setStatusDropdowns(prev => ({
+      ...prev,
+      [requirementId]: !prev[requirementId]
+    }))
+  }
+
+  // Handle status update
+  const handleStatusUpdate = async (requirementId, newStatus) => {
+    if (!onUpdateStatus) return
+    try {
+      await onUpdateStatus(requirementId, newStatus)
+      setStatusDropdowns(prev => ({
+        ...prev,
+        [requirementId]: false
+      }))
+    } catch (error) {
+      console.error("Failed to update status:", error)
+    }
   }
 
   const loadDocuments = async (requirementId, forceReload = false) => {
@@ -729,10 +792,10 @@ export default function RequirementsTabs({
                       return (
                         <div
                           key={`req-${requirement.id}-${activeSection}`}
-                          className="border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200"
+                          className="border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200"
                         >
                           {/* Requirement Header */}
-                          <div className="bg-gradient-to-r from-gray-50 to-indigo-50/30 p-4 flex items-center justify-between border-b border-gray-200">
+                          <div className="bg-gradient-to-r from-gray-50 to-indigo-50/30 p-4 flex items-center justify-between border-b border-gray-200 relative">
                             <div className="flex items-center gap-3 flex-1">
                               <button
                                 onClick={() => toggleRequirementExpand(requirement.id)}
@@ -754,6 +817,52 @@ export default function RequirementsTabs({
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
+                              {/* Status Dropdown - Only for company owners */}
+                              {!isAuditor && onUpdateStatus && (
+                                <div className="relative status-dropdown-container" style={{ zIndex: statusDropdowns[requirement.id] ? 1000 : 'auto' }}>
+                                  <button
+                                    onClick={() => toggleStatusDropdown(requirement.id)}
+                                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border-2 transition-all duration-200 flex items-center gap-2 ${getStatusLabel(getRequirementStatus(requirement.id)).color
+                                      } hover:shadow-md relative`}
+                                    style={{ zIndex: statusDropdowns[requirement.id] ? 1001 : 'auto' }}
+                                  >
+                                    <span>{getStatusLabel(getRequirementStatus(requirement.id)).label}</span>
+                                    {statusDropdowns[requirement.id] ? (
+                                      <ChevronUp className="w-4 h-4" />
+                                    ) : (
+                                      <ChevronDown className="w-4 h-4" />
+                                    )}
+                                  </button>
+                                  {statusDropdowns[requirement.id] && (
+                                    <div className="absolute right-0 top-full mt-2 w-32 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden status-dropdown-container" style={{ zIndex: 1002 }}>
+                                      <button
+                                        onClick={() => handleStatusUpdate(requirement.id, 0)}
+                                        className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center gap-2 ${getRequirementStatus(requirement.id) === 0 ? "bg-red-50 font-semibold" : ""
+                                          }`}
+                                      >
+                                        <XCircle className={`w-4 h-4 ${getRequirementStatus(requirement.id) === 0 ? "text-red-600" : "text-gray-400"}`} />
+                                        No
+                                      </button>
+                                      <button
+                                        onClick={() => handleStatusUpdate(requirement.id, 1)}
+                                        className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center gap-2 ${getRequirementStatus(requirement.id) === 1 ? "bg-orange-50 font-semibold" : ""
+                                          }`}
+                                      >
+                                        <AlertCircle className={`w-4 h-4 ${getRequirementStatus(requirement.id) === 1 ? "text-orange-600" : "text-gray-400"}`} />
+                                        TSE
+                                      </button>
+                                      <button
+                                        onClick={() => handleStatusUpdate(requirement.id, 2)}
+                                        className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center gap-2 ${getRequirementStatus(requirement.id) === 2 ? "bg-green-50 font-semibold" : ""
+                                          }`}
+                                      >
+                                        <CheckCircle2 className={`w-4 h-4 ${getRequirementStatus(requirement.id) === 2 ? "text-green-600" : "text-gray-400"}`} />
+                                        Yes
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                               {!isAuditor && onUpload && (
                                 <button
                                   onClick={() => {
