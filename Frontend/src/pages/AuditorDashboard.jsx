@@ -23,7 +23,7 @@ import {
   Check,
   XCircle,
 } from "lucide-react"
-import { getAllCompanies, getCompanyDocuments, reviewDocument, hasAlreadyReviewed, downloadFile, getAllSections, getAllRequirements, getRequirementDocuments } from "../lib/auditor-api"
+import { getAllCompanies, getCompanyDocuments, reviewDocument, hasAlreadyReviewed, downloadFile, getAllSections, getAllRequirements, getRequirementDocuments, getRequirementsWithAuditStatus, upsertAudit } from "../lib/auditor-api"
 import RequirementsTabs from "../components/RequirementsTabs"
 
 export default function AuditorDashboard() {
@@ -39,6 +39,7 @@ export default function AuditorDashboard() {
   const [toast, setToast] = useState(null)
   const [sections, setSections] = useState([])
   const [requirements, setRequirements] = useState([])
+  const [auditStatuses, setAuditStatuses] = useState([])
 
   const [reviewForm, setReviewForm] = useState({
     rating: "ACCEPTED",
@@ -70,7 +71,7 @@ export default function AuditorDashboard() {
 
   const fetchCompanyDocuments = async (companyId) => {
     try {
-      const [docsData, sectionsData, requirementsData] = await Promise.all([
+      const [docsData, sectionsData, requirementsData, auditStatusesData] = await Promise.all([
         getCompanyDocuments(companyId),
         getAllSections().catch((err) => {
           console.error("Failed to load sections:", err)
@@ -79,27 +80,21 @@ export default function AuditorDashboard() {
         getAllRequirements().catch((err) => {
           console.error("Failed to load requirements:", err)
           return []
+        }),
+        getRequirementsWithAuditStatus(companyId).catch((err) => {
+          console.error("Failed to load audit statuses:", err)
+          return []
         })
       ])
-
-      // Normalize potential paginated responses to plain arrays
-      const normalizedSections = Array.isArray(sectionsData)
-        ? sectionsData
-        : (sectionsData && Array.isArray(sectionsData.content))
-          ? sectionsData.content
-          : []
-      const normalizedRequirements = Array.isArray(requirementsData)
-        ? requirementsData
-        : (requirementsData && Array.isArray(requirementsData.content))
-          ? requirementsData.content
-          : []
-
-      console.log("Fetched sections (normalized):", normalizedSections)
-      console.log("Fetched requirements (normalized):", normalizedRequirements)
-
+      
+      console.log("Fetched sections:", sectionsData)
+      console.log("Fetched requirements:", requirementsData)
+      console.log("Fetched audit statuses:", auditStatusesData)
+      
       setCompanyDocuments(docsData)
-      setSections(normalizedSections)
-      setRequirements(normalizedRequirements)
+      setSections(sectionsData)
+      setRequirements(requirementsData)
+      setAuditStatuses(auditStatusesData)
 
       // Check which documents the user has already reviewed
       const userId = localStorage.getItem("userId")
@@ -188,6 +183,20 @@ export default function AuditorDashboard() {
       }
     } catch (err) {
       showToast("Error submitting review: " + err.message, "error")
+      throw err
+    }
+  }
+
+  const handleUpdateAuditStatus = async (requirementId, status) => {
+    if (!selectedCompany) return
+    try {
+      await upsertAudit(requirementId, selectedCompany.id, status)
+      // Refresh audit statuses
+      const updatedStatuses = await getRequirementsWithAuditStatus(selectedCompany.id)
+      setAuditStatuses(updatedStatuses)
+      showToast("Audit status updated successfully!")
+    } catch (err) {
+      showToast("Failed to update audit status: " + err.message, "error")
       throw err
     }
   }
@@ -398,6 +407,8 @@ export default function AuditorDashboard() {
                 onReview={handleReviewClick}
                 onDownload={handleDownload}
                 getRequirementDocuments={getRequirementDocuments}
+                auditStatuses={auditStatuses || []}
+                onUpdateAuditStatus={handleUpdateAuditStatus}
               />
             </div>
           </div>
@@ -465,28 +476,6 @@ export default function AuditorDashboard() {
 
                   <button
                     type="button"
-                    onClick={() => setReviewForm({ ...reviewForm, rating: "TSE" })}
-                    className={`w-full flex items-center gap-4 p-4 rounded-lg border-2 transition-all ${
-                      reviewForm.rating === "TSE"
-                        ? "border-orange-500 bg-orange-50"
-                        : "border-gray-200 hover:border-orange-300"
-                    }`}
-                  >
-                    <div className={`p-3 rounded-lg ${
-                      reviewForm.rating === "TSE" ? "bg-orange-500" : "bg-orange-100"
-                    }`}>
-                      <AlertCircle className={`w-6 h-6 ${
-                        reviewForm.rating === "TSE" ? "text-white" : "text-orange-600"
-                      }`} />
-                    </div>
-                    <div className="flex-1 text-left">
-                      <p className="font-semibold text-gray-900">TSE (To See Evidence)</p>
-                      <p className="text-sm text-gray-600">Additional evidence or clarification needed</p>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
                     onClick={() => setReviewForm({ ...reviewForm, rating: "REJECTED" })}
                     className={`w-full flex items-center gap-4 p-4 rounded-lg border-2 transition-all ${
                       reviewForm.rating === "REJECTED"
@@ -545,7 +534,7 @@ export default function AuditorDashboard() {
               } px-6 py-4 rounded-lg shadow-lg flex items-center gap-3`}
           >
             {toast.type === "success" ? (
-              <Check className="w-5 h-5" />
+              <X className="w-5 h-5" />
             ) : toast.type === "error" ? (
               <AlertCircle className="w-5 h-5" />
             ) : (

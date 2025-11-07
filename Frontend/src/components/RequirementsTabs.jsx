@@ -29,8 +29,10 @@ export default function RequirementsTabs({
   onReview,
   getRequirementDocuments,
   refreshRequirementId = null, // When this changes, refresh that requirement's documents
-  requirementStatuses = [], // Array of requirement status objects
-  onUpdateStatus = null // Function to update requirement status
+  requirementStatuses = [], // Array of requirement status objects (for company owners)
+  onUpdateStatus = null, // Function to update requirement status (for company owners)
+  auditStatuses = [], // Array of audit status objects (for auditors)
+  onUpdateAuditStatus = null // Function to update audit status (for auditors)
 }) {
   const [activeSection, setActiveSection] = useState(null)
   const [expandedSections, setExpandedSections] = useState(new Set())
@@ -49,6 +51,12 @@ export default function RequirementsTabs({
   const [currentAuditorId, setCurrentAuditorId] = useState(null)
   const [expandedReviewDocs, setExpandedReviewDocs] = useState(new Set()) // Track which documents have reviews expanded (company view)
   const [statusDropdowns, setStatusDropdowns] = useState({}) // Track which requirement status dropdowns are open
+  const [requirementResponses, setRequirementResponses] = useState({}) // Cache for requirement responses keyed by requirementId
+  const [loadingResponses, setLoadingResponses] = useState({}) // Track loading state for responses
+  const [responseDialogOpen, setResponseDialogOpen] = useState(false) // Dialog for add/update response
+  const [editingResponse, setEditingResponse] = useState(null) // The response being edited (null for new)
+  const [editingRequirementId, setEditingRequirementId] = useState(null) // The requirement ID for the response
+  const [responseText, setResponseText] = useState("") // Text in the response dialog
 
   // Get current auditor ID
   useEffect(() => {
@@ -290,14 +298,90 @@ export default function RequirementsTabs({
       } else {
         next.add(requirementId)
         loadDocuments(requirementId)
+        loadRequirementResponse(requirementId)
       }
       return next
     })
   }
 
-  // Get status for a requirement (defaults to 0 if not found)
+  // Load requirement response
+  const loadRequirementResponse = async (requirementId) => {
+    if (!companyId || loadingResponses[requirementId]) return
+
+    setLoadingResponses(prev => ({ ...prev, [requirementId]: true }))
+    try {
+      let response
+      if (isAuditor) {
+        const { getRequirementResponse } = await import("../lib/auditor-api")
+        response = await getRequirementResponse(companyId, requirementId)
+      } else {
+        const { getRequirementResponse } = await import("../lib/company-api")
+        response = await getRequirementResponse(companyId, requirementId)
+      }
+      setRequirementResponses(prev => ({ ...prev, [requirementId]: response }))
+    } catch (error) {
+      console.error(`Error loading response for requirement ${requirementId}:`, error)
+      setRequirementResponses(prev => ({ ...prev, [requirementId]: null }))
+    } finally {
+      setLoadingResponses(prev => ({ ...prev, [requirementId]: false }))
+    }
+  }
+
+  // Open response dialog for add/update
+  const openResponseDialog = (requirementId, existingResponse = null) => {
+    setEditingRequirementId(requirementId)
+    setEditingResponse(existingResponse)
+    setResponseText(existingResponse?.responseText || "")
+    setResponseDialogOpen(true)
+  }
+
+  // Close response dialog
+  const closeResponseDialog = () => {
+    setResponseDialogOpen(false)
+    setEditingResponse(null)
+    setEditingRequirementId(null)
+    setResponseText("")
+  }
+
+  // Handle submit response (create or update)
+  const handleSubmitResponse = async (e) => {
+    e.preventDefault()
+    if (!responseText.trim() || !editingRequirementId || !companyId) return
+
+    try {
+      if (isAuditor) {
+        // Auditors can't create/update responses
+        return
+      }
+
+      const { createRequirementResponse, updateRequirementResponse } = await import("../lib/company-api")
+
+      if (editingResponse) {
+        // Update existing response
+        const updated = await updateRequirementResponse(editingResponse.id, responseText)
+        setRequirementResponses(prev => ({ ...prev, [editingRequirementId]: updated }))
+      } else {
+        // Create new response
+        const created = await createRequirementResponse(editingRequirementId, companyId, responseText)
+        setRequirementResponses(prev => ({ ...prev, [editingRequirementId]: created }))
+      }
+
+      closeResponseDialog()
+    } catch (error) {
+      console.error("Error saving response:", error)
+      alert("Failed to save response: " + error.message)
+    }
+  }
+
+  // Get status for a requirement (defaults to 0 if not found) - for company owners
   const getRequirementStatus = (requirementId) => {
     const statusObj = requirementStatuses.find(s => s.requirement?.id === requirementId)
+    return statusObj ? statusObj.status : 0
+  }
+
+  // Get audit status for a requirement (defaults to 0 if not found) - for auditors
+  const getAuditStatus = (requirementId) => {
+    const statusObj = auditStatuses.find(s => s.requirementId === requirementId)
     return statusObj ? statusObj.status : 0
   }
 
@@ -315,7 +399,7 @@ export default function RequirementsTabs({
     }
   }
 
-  // Toggle status dropdown
+  // Toggle status dropdown (for company owners)
   const toggleStatusDropdown = (requirementId) => {
     if (isAuditor || !onUpdateStatus) return
     setStatusDropdowns(prev => ({
@@ -324,7 +408,16 @@ export default function RequirementsTabs({
     }))
   }
 
-  // Handle status update
+  // Toggle audit status dropdown (for auditors and company owners)
+  const toggleAuditStatusDropdown = (requirementId) => {
+    if (!onUpdateAuditStatus) return
+    setStatusDropdowns(prev => ({
+      ...prev,
+      [`audit-${requirementId}`]: !prev[`audit-${requirementId}`]
+    }))
+  }
+
+  // Handle status update (for company owners)
   const handleStatusUpdate = async (requirementId, newStatus) => {
     if (!onUpdateStatus) return
     try {
@@ -335,6 +428,20 @@ export default function RequirementsTabs({
       }))
     } catch (error) {
       console.error("Failed to update status:", error)
+    }
+  }
+
+  // Handle audit status update (for auditors and company owners)
+  const handleAuditStatusUpdate = async (requirementId, newStatus) => {
+    if (!onUpdateAuditStatus) return
+    try {
+      await onUpdateAuditStatus(requirementId, newStatus)
+      setStatusDropdowns(prev => ({
+        ...prev,
+        [`audit-${requirementId}`]: false
+      }))
+    } catch (error) {
+      console.error("Failed to update audit status:", error)
     }
   }
 
@@ -686,6 +793,58 @@ export default function RequirementsTabs({
         }}
       />
 
+      {/* Response Dialog */}
+      {responseDialogOpen && !isAuditor && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 animate-scale-in">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-gray-900">
+                {editingResponse ? "Update Response" : "Add Response"}
+              </h3>
+              <button
+                onClick={closeResponseDialog}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitResponse} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Response Text <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={responseText}
+                  onChange={(e) => setResponseText(e.target.value)}
+                  required
+                  rows={6}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                  placeholder="Enter your response to this requirement..."
+                />
+              </div>
+
+              <div className="flex items-center gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={closeResponseDialog}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium flex items-center gap-2"
+                >
+                  <Send className="w-4 h-4" />
+                  {editingResponse ? "Update Response" : "Add Response"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-6">
         {/* Creative Vertical Sidebar for Sections */}
         <div className="w-80 flex-shrink-0">
@@ -863,6 +1022,63 @@ export default function RequirementsTabs({
                                   )}
                                 </div>
                               )}
+                              {/* Audit Status - Read-only for company owners, editable for auditors */}
+                              {(!isAuditor && auditStatuses.length > 0) || (isAuditor && onUpdateAuditStatus) ? (
+                                <>
+                                  {!isAuditor ? (
+                                    // Read-only display for company owners
+                                    <div className={`px-3 py-1.5 rounded-lg text-sm font-medium border-2 flex items-center gap-2 ${getStatusLabel(getAuditStatus(requirement.id)).color}`} title="Auditor Status (Read-only)">
+                                      <span>Audit: {getStatusLabel(getAuditStatus(requirement.id)).label}</span>
+                                    </div>
+                                  ) : (
+                                    // Editable dropdown for auditors (No/TSE/Yes)
+                                    <div className="relative status-dropdown-container" style={{ zIndex: statusDropdowns[`audit-${requirement.id}`] ? 1000 : 'auto' }}>
+                                      <button
+                                        onClick={() => toggleAuditStatusDropdown(requirement.id)}
+                                        className={`px-3 py-1.5 rounded-lg text-sm font-medium border-2 transition-all duration-200 flex items-center gap-2 ${getStatusLabel(getAuditStatus(requirement.id)).color
+                                          } hover:shadow-md relative`}
+                                        style={{ zIndex: statusDropdowns[`audit-${requirement.id}`] ? 1001 : 'auto' }}
+                                        title="Auditor Status"
+                                      >
+                                        <span>{getStatusLabel(getAuditStatus(requirement.id)).label}</span>
+                                        {statusDropdowns[`audit-${requirement.id}`] ? (
+                                          <ChevronUp className="w-4 h-4" />
+                                        ) : (
+                                          <ChevronDown className="w-4 h-4" />
+                                        )}
+                                      </button>
+                                      {statusDropdowns[`audit-${requirement.id}`] && (
+                                        <div className="absolute right-0 top-full mt-2 w-32 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden status-dropdown-container" style={{ zIndex: 1002 }}>
+                                          <button
+                                            onClick={() => handleAuditStatusUpdate(requirement.id, 0)}
+                                            className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center gap-2 ${getAuditStatus(requirement.id) === 0 ? "bg-red-50 font-semibold" : ""
+                                              }`}
+                                          >
+                                            <XCircle className={`w-4 h-4 ${getAuditStatus(requirement.id) === 0 ? "text-red-600" : "text-gray-400"}`} />
+                                            No
+                                          </button>
+                                          <button
+                                            onClick={() => handleAuditStatusUpdate(requirement.id, 1)}
+                                            className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center gap-2 ${getAuditStatus(requirement.id) === 1 ? "bg-orange-50 font-semibold" : ""
+                                              }`}
+                                          >
+                                            <AlertCircle className={`w-4 h-4 ${getAuditStatus(requirement.id) === 1 ? "text-orange-600" : "text-gray-400"}`} />
+                                            TSE
+                                          </button>
+                                          <button
+                                            onClick={() => handleAuditStatusUpdate(requirement.id, 2)}
+                                            className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center gap-2 ${getAuditStatus(requirement.id) === 2 ? "bg-green-50 font-semibold" : ""
+                                              }`}
+                                          >
+                                            <CheckCircle2 className={`w-4 h-4 ${getAuditStatus(requirement.id) === 2 ? "text-green-600" : "text-gray-400"}`} />
+                                            Yes
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </>
+                              ) : null}
                               {!isAuditor && onUpload && (
                                 <button
                                   onClick={() => {
@@ -879,6 +1095,54 @@ export default function RequirementsTabs({
                               )}
                             </div>
                           </div>
+
+                          {/* Requirement Response Section */}
+                          {isExpanded && (
+                            <div className="px-4 pt-4 pb-2 bg-white border-b border-gray-200">
+                              {loadingResponses[requirement.id] ? (
+                                <div className="flex items-center gap-2 text-sm text-gray-500">
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  <span>Loading response...</span>
+                                </div>
+                              ) : (
+                                <div className="space-y-3">
+                                  {requirementResponses[requirement.id] ? (
+                                    <>
+                                      <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+                                        <div className="flex items-start justify-between gap-3">
+                                          <div className="flex-1">
+                                            <p className="text-xs font-medium text-indigo-700 mb-1">Response:</p>
+                                            <p className="text-sm text-gray-800 whitespace-pre-wrap">
+                                              {requirementResponses[requirement.id].responseText}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      {!isAuditor && (
+                                        <button
+                                          onClick={() => openResponseDialog(requirement.id, requirementResponses[requirement.id])}
+                                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                                        >
+                                          <MessageSquare className="w-4 h-4" />
+                                          Update Response
+                                        </button>
+                                      )}
+                                    </>
+                                  ) : (
+                                    !isAuditor && (
+                                      <button
+                                        onClick={() => openResponseDialog(requirement.id)}
+                                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                                      >
+                                        <MessageSquare className="w-4 h-4" />
+                                        Add Response
+                                      </button>
+                                    )
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
 
                           {/* Documents List */}
                           {isExpanded && (
@@ -1009,7 +1273,7 @@ export default function RequirementsTabs({
                                                   <label className="block text-sm font-medium text-gray-700 mb-2">
                                                     Review Status
                                                   </label>
-                                                  <div className="grid grid-cols-3 gap-2">
+                                                  <div className="grid grid-cols-2 gap-2">
                                                     <button
                                                       type="button"
                                                       onClick={() => setReviewForms(prev => ({
@@ -1024,21 +1288,6 @@ export default function RequirementsTabs({
                                                       <Check className={`w-5 h-5 ${formData.rating === "ACCEPTED" ? "text-green-600" : "text-gray-400"
                                                         }`} />
                                                       <span className="font-medium text-sm">ACCEPTED</span>
-                                                    </button>
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => setReviewForms(prev => ({
-                                                        ...prev,
-                                                        [doc.id]: { ...formData, rating: "TSE" }
-                                                      }))}
-                                                      className={`p-3 rounded-lg border-2 transition-all flex items-center gap-2 ${formData.rating === "TSE"
-                                                        ? "border-orange-500 bg-orange-50"
-                                                        : "border-gray-200 hover:border-orange-300"
-                                                        }`}
-                                                    >
-                                                      <AlertCircle className={`w-5 h-5 ${formData.rating === "TSE" ? "text-orange-600" : "text-gray-400"
-                                                        }`} />
-                                                      <span className="font-medium text-sm">TSE</span>
                                                     </button>
                                                     <button
                                                       type="button"

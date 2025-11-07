@@ -190,3 +190,59 @@ export const getRequirementStatusProgress = async () => {
     const response = await api.get("/api/v1/requirements-status/progress")
     return response.data || 0
 }
+
+// Requirement Response API
+export const getRequirementResponse = async (companyId, requirementId) => {
+    try {
+        const response = await api.get(`/api/v1/requirement-responses/${companyId}/${requirementId}`)
+        return response.data
+    } catch (error) {
+        // If response not found (404), return null
+        if (error.response?.status === 404) {
+            return null
+        }
+        throw error
+    }
+}
+
+export const createRequirementResponse = async (requirementId, companyId, responseText) => {
+    const response = await api.post("/api/v1/requirement-responses", null, {
+        params: {
+            requirementId,
+            companyId,
+            responseText
+        }
+    })
+    return response.data
+}
+
+export const updateRequirementResponse = async (responseId, responseText) => {
+    const response = await api.put(`/api/v1/requirement-responses/${responseId}`, null, {
+        params: {
+            responseText
+        }
+    })
+    return response.data
+}
+
+// Requirement Auditing API (for company owners to see auditor progress and statuses)
+export const getAuditProgress = async (companyId) => {
+    const response = await api.get(`/api/v1/requirement-auditing/progress/${companyId}`)
+    return response.data || 0
+}
+
+export const getRequirementsWithAuditStatus = async (companyId) => {
+    const response = await api.get(`/api/v1/requirement-auditing/company/${companyId}/requirements`)
+    return response.data || []
+}
+
+export const upsertAudit = async (requirementId, companyId, status) => {
+    const response = await api.post("/api/v1/requirement-auditing/upsert", null, {
+        params: {
+            requirementId,
+            companyId,
+            status
+        }
+    })
+    return response.data
+}
