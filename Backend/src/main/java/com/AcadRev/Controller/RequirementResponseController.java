@@ -6,6 +6,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/requirement-responses")
 @RequiredArgsConstructor
@@ -21,6 +23,15 @@ public class RequirementResponseController {
 
         RequirementResponseDTO response = requirementResponseService.createResponse(requirementId, companyId, responseText);
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{parentResponseId}/reply")
+    public ResponseEntity<RequirementResponseDTO> createReply(
+            @PathVariable int parentResponseId,
+            @RequestParam String responseText) {
+
+        RequirementResponseDTO reply = requirementResponseService.createReply(parentResponseId, responseText);
+        return ResponseEntity.ok(reply);
     }
 
     @PutMapping("/{id}")
@@ -39,5 +50,14 @@ public class RequirementResponseController {
 
         RequirementResponseDTO response = requirementResponseService.getResponseByCompanyAndRequirement(companyId, requirementId);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{companyId}/{requirementId}/all")
+    public ResponseEntity<List<RequirementResponseDTO>> getAllResponses(
+            @PathVariable int companyId,
+            @PathVariable int requirementId) {
+
+        List<RequirementResponseDTO> responses = requirementResponseService.getAllResponses(companyId, requirementId);
+        return ResponseEntity.ok(responses);
     }
 }

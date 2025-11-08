@@ -6,7 +6,6 @@ import {
   Upload,
   Download,
   FileText,
-  Star,
   CheckCircle2,
   XCircle,
   AlertCircle,
@@ -304,35 +303,40 @@ export default function RequirementsTabs({
     })
   }
 
-  // Load requirement response
+  // Load requirement responses (all responses with replies)
   const loadRequirementResponse = async (requirementId) => {
     if (!companyId || loadingResponses[requirementId]) return
 
     setLoadingResponses(prev => ({ ...prev, [requirementId]: true }))
     try {
-      let response
+      let responses
       if (isAuditor) {
-        const { getRequirementResponse } = await import("../lib/auditor-api")
-        response = await getRequirementResponse(companyId, requirementId)
+        const { getAllRequirementResponses } = await import("../lib/auditor-api")
+        responses = await getAllRequirementResponses(companyId, requirementId)
       } else {
-        const { getRequirementResponse } = await import("../lib/company-api")
-        response = await getRequirementResponse(companyId, requirementId)
+        const { getAllRequirementResponses } = await import("../lib/company-api")
+        responses = await getAllRequirementResponses(companyId, requirementId)
       }
-      setRequirementResponses(prev => ({ ...prev, [requirementId]: response }))
+      // Store all responses (array) for this requirement
+      setRequirementResponses(prev => ({ ...prev, [requirementId]: responses || [] }))
     } catch (error) {
-      console.error(`Error loading response for requirement ${requirementId}:`, error)
-      setRequirementResponses(prev => ({ ...prev, [requirementId]: null }))
+      console.error(`Error loading responses for requirement ${requirementId}:`, error)
+      setRequirementResponses(prev => ({ ...prev, [requirementId]: [] }))
     } finally {
       setLoadingResponses(prev => ({ ...prev, [requirementId]: false }))
     }
   }
 
   // Open response dialog for add/update
-  const openResponseDialog = (requirementId, existingResponse = null) => {
+  const openResponseDialog = (requirementId, existingResponse = null, parentResponseId = null) => {
     setEditingRequirementId(requirementId)
     setEditingResponse(existingResponse)
     setResponseText(existingResponse?.responseText || "")
     setResponseDialogOpen(true)
+    // Store parent response ID if replying
+    if (parentResponseId) {
+      setEditingResponse({ ...existingResponse, parentResponseId })
+    }
   }
 
   // Close response dialog
@@ -346,24 +350,42 @@ export default function RequirementsTabs({
   // Handle submit response (create or update)
   const handleSubmitResponse = async (e) => {
     e.preventDefault()
-    if (!responseText.trim() || !editingRequirementId || !companyId) return
+    if (!responseText.trim() || !companyId) return
 
     try {
       if (isAuditor) {
-        // Auditors can't create/update responses
-        return
+        // Auditors can only reply to existing responses
+        if (editingResponse?.parentResponseId || editingResponse?.id) {
+          const { createRequirementResponseReply } = await import("../lib/auditor-api")
+          const parentResponseId = editingResponse?.parentResponseId || editingResponse?.id
+          await createRequirementResponseReply(parentResponseId, responseText)
+          // Reload all responses to get updated tree
+          await loadRequirementResponse(editingRequirementId)
+          closeResponseDialog()
+          return
+        } else {
+          alert("Auditors can only reply to existing responses")
+          return
+        }
       }
 
-      const { createRequirementResponse, updateRequirementResponse } = await import("../lib/company-api")
+      const { createRequirementResponse, updateRequirementResponse, createRequirementResponseReply } = await import("../lib/company-api")
 
-      if (editingResponse) {
-        // Update existing response
-        const updated = await updateRequirementResponse(editingResponse.id, responseText)
-        setRequirementResponses(prev => ({ ...prev, [editingRequirementId]: updated }))
+      if (editingResponse?.id && !editingResponse?.parentResponseId) {
+        // Update existing top-level response
+        await updateRequirementResponse(editingResponse.id, responseText)
+        // Reload all responses to get updated tree
+        await loadRequirementResponse(editingRequirementId)
+      } else if (editingResponse?.parentResponseId) {
+        // Create reply
+        await createRequirementResponseReply(editingResponse.parentResponseId, responseText)
+        // Reload all responses to get updated tree
+        await loadRequirementResponse(editingRequirementId)
       } else {
-        // Create new response
-        const created = await createRequirementResponse(editingRequirementId, companyId, responseText)
-        setRequirementResponses(prev => ({ ...prev, [editingRequirementId]: created }))
+        // Create new top-level response
+        await createRequirementResponse(editingRequirementId, companyId, responseText)
+        // Reload all responses to get updated tree
+        await loadRequirementResponse(editingRequirementId)
       }
 
       closeResponseDialog()
@@ -794,12 +816,12 @@ export default function RequirementsTabs({
       />
 
       {/* Response Dialog */}
-      {responseDialogOpen && !isAuditor && (
+      {responseDialogOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 animate-scale-in">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold text-gray-900">
-                {editingResponse ? "Update Response" : "Add Response"}
+                {editingResponse?.parentResponseId ? "Reply to Response" : editingResponse ? "Update Response" : isAuditor ? "Reply" : "Add Response"}
               </h3>
               <button
                 onClick={closeResponseDialog}
@@ -1102,43 +1124,98 @@ export default function RequirementsTabs({
                               {loadingResponses[requirement.id] ? (
                                 <div className="flex items-center gap-2 text-sm text-gray-500">
                                   <Loader2 className="w-4 h-4 animate-spin" />
-                                  <span>Loading response...</span>
+                                  <span>Loading responses...</span>
                                 </div>
                               ) : (
                                 <div className="space-y-3">
-                                  {requirementResponses[requirement.id] ? (
-                                    <>
-                                      <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
-                                        <div className="flex items-start justify-between gap-3">
-                                          <div className="flex-1">
-                                            <p className="text-xs font-medium text-indigo-700 mb-1">Response:</p>
-                                            <p className="text-sm text-gray-800 whitespace-pre-wrap">
-                                              {requirementResponses[requirement.id].responseText}
-                                            </p>
-                                          </div>
-                                        </div>
-                                      </div>
-                                      {!isAuditor && (
+                                  {(() => {
+                                    const responses = requirementResponses[requirement.id] || []
+                                    if (responses.length === 0) {
+                                      return !isAuditor ? (
                                         <button
-                                          onClick={() => openResponseDialog(requirement.id, requirementResponses[requirement.id])}
+                                          onClick={() => openResponseDialog(requirement.id)}
                                           className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
                                         >
                                           <MessageSquare className="w-4 h-4" />
-                                          Update Response
+                                          Add Response
                                         </button>
-                                      )}
-                                    </>
-                                  ) : (
-                                    !isAuditor && (
-                                      <button
-                                        onClick={() => openResponseDialog(requirement.id)}
-                                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                                      >
-                                        <MessageSquare className="w-4 h-4" />
-                                        Add Response
-                                      </button>
+                                      ) : null
+                                    }
+                                    
+                                    // Render conversation thread
+                                    const renderResponse = (response, depth = 0) => {
+                                      const isCompanyOwner = response.createdByUserRole === "COMPANY_OWNER"
+                                      const isCurrentUser = response.createdByUserId === parseInt(localStorage.getItem("userId") || "0")
+                                      
+                                      return (
+                                        <div key={response.id} className={`${depth > 0 ? "ml-6 mt-3 border-l-2 border-indigo-200 pl-4" : ""}`}>
+                                          <div className={`rounded-lg p-3 ${isCompanyOwner ? "bg-indigo-50 border border-indigo-200" : "bg-purple-50 border border-purple-200"}`}>
+                                            <div className="flex items-start justify-between gap-3 mb-2">
+                                              <div className="flex-1">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                  <span className={`text-xs font-medium ${isCompanyOwner ? "text-indigo-700" : "text-purple-700"}`}>
+                                                    {response.createdByUserName || (isCompanyOwner ? "Company Owner" : "Auditor")}
+                                                  </span>
+                                                  <span className="text-xs text-gray-500">
+                                                    {response.createdAt ? new Date(response.createdAt).toLocaleString() : ""}
+                                                  </span>
+                                                </div>
+                                                <p className="text-sm text-gray-800 whitespace-pre-wrap">
+                                                  {response.responseText}
+                                                </p>
+                                              </div>
+                                            </div>
+                                            
+                                            {/* Reply and Update buttons - show side by side */}
+                                            {((isAuditor && isCompanyOwner) || (!isAuditor)) && (
+                                              <div className="mt-2 flex items-center gap-2">
+                                                <button
+                                                  onClick={() => openResponseDialog(requirement.id, null, response.id)}
+                                                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-2"
+                                                >
+                                                  <MessageSquare className="w-3 h-3" />
+                                                  Reply
+                                                </button>
+                                                
+                                                {/* Update button - only for company owners on their own top-level responses */}
+                                                {!isAuditor && isCurrentUser && !response.parentResponseId && (
+                                                  <button
+                                                    onClick={() => openResponseDialog(requirement.id, response)}
+                                                    className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-2"
+                                                  >
+                                                    <MessageSquare className="w-3 h-3" />
+                                                    Update
+                                                  </button>
+                                                )}
+                                              </div>
+                                            )}
+                                          </div>
+                                          
+                                          {/* Render replies recursively */}
+                                          {response.replies && response.replies.length > 0 && (
+                                            <div className="mt-2">
+                                              {response.replies.map(reply => renderResponse(reply, depth + 1))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )
+                                    }
+                                    
+                                    return (
+                                      <div className="space-y-3">
+                                        {responses.map(response => renderResponse(response))}
+                                        {!isAuditor && (
+                                          <button
+                                            onClick={() => openResponseDialog(requirement.id)}
+                                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                                          >
+                                            <MessageSquare className="w-4 h-4" />
+                                            Add Response
+                                          </button>
+                                        )}
+                                      </div>
                                     )
-                                  )}
+                                  })()}
                                 </div>
                               )}
                             </div>

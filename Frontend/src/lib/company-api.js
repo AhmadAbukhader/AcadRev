@@ -205,11 +205,33 @@ export const getRequirementResponse = async (companyId, requirementId) => {
     }
 }
 
+export const getAllRequirementResponses = async (companyId, requirementId) => {
+    try {
+        const response = await api.get(`/api/v1/requirement-responses/${companyId}/${requirementId}/all`)
+        return response.data || []
+    } catch (error) {
+        // If response not found (404), return empty array
+        if (error.response?.status === 404) {
+            return []
+        }
+        throw error
+    }
+}
+
 export const createRequirementResponse = async (requirementId, companyId, responseText) => {
     const response = await api.post("/api/v1/requirement-responses", null, {
         params: {
             requirementId,
             companyId,
+            responseText
+        }
+    })
+    return response.data
+}
+
+export const createRequirementResponseReply = async (parentResponseId, responseText) => {
+    const response = await api.post(`/api/v1/requirement-responses/${parentResponseId}/reply`, null, {
+        params: {
             responseText
         }
     })

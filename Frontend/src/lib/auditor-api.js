@@ -122,7 +122,7 @@ export const getRequirementDocuments = async (requirementId, companyId = null) =
     return documents
 }
 
-// Requirement Response API (read-only for auditors)
+// Requirement Response API (read-only for auditors, but can reply)
 export const getRequirementResponse = async (companyId, requirementId) => {
     try {
         const response = await api.get(`/api/v1/requirement-responses/${companyId}/${requirementId}`)
@@ -134,6 +134,28 @@ export const getRequirementResponse = async (companyId, requirementId) => {
         }
         throw error
     }
+}
+
+export const getAllRequirementResponses = async (companyId, requirementId) => {
+    try {
+        const response = await api.get(`/api/v1/requirement-responses/${companyId}/${requirementId}/all`)
+        return response.data || []
+    } catch (error) {
+        // If response not found (404), return empty array
+        if (error.response?.status === 404) {
+            return []
+        }
+        throw error
+    }
+}
+
+export const createRequirementResponseReply = async (parentResponseId, responseText) => {
+    const response = await api.post(`/api/v1/requirement-responses/${parentResponseId}/reply`, null, {
+        params: {
+            responseText
+        }
+    })
+    return response.data
 }
 
 // Requirement Auditing API
