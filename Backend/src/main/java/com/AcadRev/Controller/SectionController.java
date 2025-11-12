@@ -4,7 +4,6 @@ import com.AcadRev.Model.Requirement;
 import com.AcadRev.Model.Section;
 import com.AcadRev.Service.SectionService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;

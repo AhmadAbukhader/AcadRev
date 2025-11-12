@@ -1,0 +1,104 @@
+version: "3.8"
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: acadrev-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-acadrev}
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./Database/AcadRev.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - acadrev-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Spring Boot Backend
+  backend:
+    build:
+      context: ./Backend
+      dockerfile: Dockerfile
+    container_name: acadrev-backend
+    environment:
+      # Server Configuration
+      SERVER_PORT: ${SERVER_PORT:-8089}
+
+      # Database Configuration
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-acadrev}
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_SCHEMA: ${DB_SCHEMA:-acadrev_schema}
+
+      # JWT Configuration
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-92f42dd3b0d3c976f4eb4a166b8eb9d825baf2063c1ad612bd7eb6035fd3ce5b}
+      JWT_EXPIRATION_TIME: ${JWT_EXPIRATION_TIME:-3600000}
+
+      # File Upload Configuration
+      MAX_FILE_SIZE: ${MAX_FILE_SIZE:-10MB}
+      MAX_REQUEST_SIZE: ${MAX_REQUEST_SIZE:-10MB}
+
+      # Hibernate/JPA Configuration
+      HIBERNATE_SQL_LOG_LEVEL: ${HIBERNATE_SQL_LOG_LEVEL:-INFO}
+      HIBERNATE_BINDER_LOG_LEVEL: ${HIBERNATE_BINDER_LOG_LEVEL:-INFO}
+      JPA_SHOW_SQL: ${JPA_SHOW_SQL:-false}
+      JPA_DDL_AUTO: ${JPA_DDL_AUTO:-none}
+      HIBERNATE_FORMAT_SQL: ${HIBERNATE_FORMAT_SQL:-false}
+    ports:
+      - "${SERVER_PORT:-8089}:8089"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - acadrev-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost:8089/actuator/health || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./Frontend
+      dockerfile: Dockerfile
+    container_name: acadrev-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+    networks:
+      - acadrev-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost/health || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  acadrev-network:
+    driver: bridge

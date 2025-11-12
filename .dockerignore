@@ -1,0 +1,28 @@
+# Backend
+Backend/target/
+Backend/.mvn/
+Backend/mvnw
+Backend/mvnw.cmd
+Backend/.idea/
+Backend/*.iml
+
+# Frontend
+Frontend/node_modules/
+Frontend/dist/
+Frontend/.vite/
+Frontend/.idea/
+Frontend/*.iml
+
+# General
+.git/
+.gitignore
+*.md
+.env
+.env.local
+.env.*.local
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+
