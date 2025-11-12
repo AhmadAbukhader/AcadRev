@@ -36,3 +36,31 @@ build/
 .env
 .env.local
 .env.*.local
+
+### Node.js ###
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+### Frontend Build ###
+Frontend/dist/
+Frontend/.vite/
+Frontend/.next/
+Frontend/out/
+
+### Backend Build ###
+Backend/target/
+Backend/.mvn/
+
+### Docker ###
+*.log
+.docker/
+
+### OS ###
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
