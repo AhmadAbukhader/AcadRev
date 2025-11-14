@@ -58,6 +58,22 @@ Backend/.mvn/
 *.log
 .docker/
 
+### Traefik & SSL ###
+letsencrypt/
+acme.json
+
+### Sensitive Data ###
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+
+### Backup Files ###
+*.sql.gz
+*.sql.bak
+backup*.sql
+
 ### OS ###
 .DS_Store
 Thumbs.db
