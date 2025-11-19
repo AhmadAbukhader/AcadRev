@@ -22,7 +22,7 @@ public class DocumentController {
     private final DocumentService documentService;
 
     @PostMapping("/upload")
-    @PreAuthorize("hasAnyRole('COMPANY_OWNER')")
+    @PreAuthorize("hasAnyRole('INTERNAL_AUDITOR')")
     public ResponseEntity<String> uploadFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam("companyId") int companyId,
@@ -35,7 +35,7 @@ public class DocumentController {
     }
 
     @GetMapping("/download/{id}")
-    @PreAuthorize("hasAnyRole('COMPANY_OWNER', 'AUDITOR')")
+    @PreAuthorize("hasAnyRole('INTERNAL_AUDITOR', 'EXTERNAL_AUDITOR', 'COMPANY_MANAGER')")
     public ResponseEntity<byte[]> viewFile(@PathVariable int id) {
         Document document = documentService.getDocumentById(id);
 
@@ -49,14 +49,14 @@ public class DocumentController {
     }
 
     @GetMapping("/metadata/{id}")
-    @PreAuthorize("hasAnyRole('COMPANY_OWNER', 'AUDITOR')")
+    @PreAuthorize("hasAnyRole('INTERNAL_AUDITOR', 'EXTERNAL_AUDITOR', 'COMPANY_MANAGER')")
     public ResponseEntity<DocumentMetadataDto> getDocumentMetadata(@PathVariable int id) {
         DocumentMetadataDto metadata = documentService.getDocumentMetadata(id);
         return ResponseEntity.ok(metadata);
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('COMPANY_OWNER')")
+    @PreAuthorize("hasAnyRole('INTERNAL_AUDITOR')")
     public ResponseEntity<DocumentMetadataDto> updateDocument(@PathVariable int id,
             @RequestBody UpdateDocumentDto updateDocumentDto) {
         DocumentMetadataDto updatedDocument = documentService.updateDocument(id, updateDocumentDto);
@@ -64,7 +64,7 @@ public class DocumentController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('COMPANY_OWNER')")
+    @PreAuthorize("hasAnyRole('INTERNAL_AUDITOR')")
     public ResponseEntity<Void> deleteDocument(@PathVariable int id) {
         documentService.deleteDocument(id);
         return ResponseEntity.noContent().build();

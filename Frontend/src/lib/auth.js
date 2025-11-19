@@ -1,23 +1,27 @@
 import api from "./api"
 
 export const signup = async (data) => {
-    try {
-        const response = await api.post("/api/v1/auth/signup", {
-            username: data.email,
-            password: data.password,
-            name: data.name,
-            role: data.role
-        })
-        return response.data
-    } catch (error) {
-        if (error.response?.status === 400) {
-            throw new Error("This email is already registered. Please use a different email or try logging in.")
+    const response = await api.post("/api/v1/auth/signup", {
+        username: data.email,
+        password: data.password,
+        name: data.name,
+        role: data.role,
+        ...(data.companyId && { companyId: data.companyId })
+    })
+    
+    // Store auth data in localStorage
+    if (response.data.token) {
+        localStorage.setItem("token", response.data.token)
+        localStorage.setItem("userRole", response.data.user.role)
+        localStorage.setItem("userId", response.data.user.id)
+        
+        // Store company ID if available (for internal auditors and managers)
+        if (response.data.user.companyId) {
+            localStorage.setItem("companyId", response.data.user.companyId.toString())
         }
-        if (error.response?.data?.error?.includes("duplicate key")) {
-            throw new Error("This email is already registered. Please use a different email or try logging in.")
-        }
-        throw error
     }
+    
+    return response.data
 }
 
 export const login = async (data) => {
@@ -30,9 +34,10 @@ export const login = async (data) => {
         localStorage.setItem("userRole", response.data.user.role)
         localStorage.setItem("userId", response.data.user.id)
 
-        // For company owners, try to get their company ID
-        // Since there's no direct endpoint, we'll need to get it from localStorage
-        // or fetch it when the dashboard loads
+        // Store company ID if available (for internal auditors and managers)
+        if (response.data.user.companyId) {
+            localStorage.setItem("companyId", response.data.user.companyId.toString())
+        }
     }
     return response.data
 }

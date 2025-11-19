@@ -37,6 +37,10 @@ public class User implements UserDetails {
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "company_profile_id", nullable = true)
+    private CompanyProfile companyProfile;
+
     private String certification;
 
     @Column(name = "experience_level")

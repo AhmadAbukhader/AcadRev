@@ -203,7 +203,7 @@ export default function DocumentPreviewModal({
                 <MessageSquare className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-500 text-lg">No reviews yet</p>
                 <p className="text-gray-400 text-sm mt-2">
-                  This document hasn't been reviewed by any auditors yet.
+                  This document hasn't been reviewed by any external auditors yet.
                 </p>
               </div>
             ) : (
@@ -225,7 +225,7 @@ export default function DocumentPreviewModal({
                           </div>
                           <div>
                             <p className="font-semibold text-gray-900">
-                              {review.auditor?.name || review.auditor?.username || "Anonymous Auditor"}
+                              {review.auditor?.name || review.auditor?.username || "Anonymous External Auditor"}
                             </p>
                             <p className="text-xs text-gray-500 flex items-center gap-2 mt-1">
                               <Calendar className="w-3 h-3" />

@@ -28,10 +28,11 @@ export default function RequirementsTabs({
   onReview,
   getRequirementDocuments,
   refreshRequirementId = null, // When this changes, refresh that requirement's documents
-  requirementStatuses = [], // Array of requirement status objects (for company owners)
-  onUpdateStatus = null, // Function to update requirement status (for company owners)
-  auditStatuses = [], // Array of audit status objects (for auditors)
-  onUpdateAuditStatus = null // Function to update audit status (for auditors)
+  requirementStatuses = [], // Array of requirement status objects (for internal auditors and company managers)
+  onUpdateStatus = null, // Function to update requirement status (for internal auditors and company managers)
+  auditStatuses = [], // Array of audit status objects (for external auditors)
+  onUpdateAuditStatus = null, // Function to update audit status (for external auditors)
+  onSectionClick = null // Callback when a section is clicked (for scrolling)
 }) {
   const [activeSection, setActiveSection] = useState(null)
   const [expandedSections, setExpandedSections] = useState(new Set())
@@ -56,6 +57,48 @@ export default function RequirementsTabs({
   const [editingResponse, setEditingResponse] = useState(null) // The response being edited (null for new)
   const [editingRequirementId, setEditingRequirementId] = useState(null) // The requirement ID for the response
   const [responseText, setResponseText] = useState("") // Text in the response dialog
+
+  // Static main sections (1-10) - always present
+  const staticMainSections = [
+    { code: "1", name: "Scope" },
+    { code: "2", name: "Normative references" },
+    { code: "3", name: "Terms and definitions" },
+    { code: "4", name: "Context of the organization" },
+    { code: "5", name: "Leadership" },
+    { code: "6", name: "Planning" },
+    { code: "7", name: "Support" },
+    { code: "8", name: "Operation" },
+    { code: "9", name: "Performance evaluation" },
+    { code: "10", name: "Improvement" }
+  ]
+
+  // Static content for sections 1-3
+  const staticContent = {
+    "1": {
+      title: "Scope",
+      content: `This International Standard specifies requirements for a quality management system when an organization: 
+
+a) needs to demonstrate its ability to consistently provide products and services that meet customer and applicable statutory and regulatory requirements, and
+
+b) aims to enhance customer satisfaction through the effective application of the system, including processes for improvement of the system and the assurance of conformity to customer and applicable statutory and regulatory requirements. 
+
+All the requirements of this International Standard are generic and are intended to be applicable to any organization, regardless of its type or size, or the products and services it provides. 
+
+NOTE 1: In this International Standard, the terms "product" or "service" only apply to products and services intended for, or required by, a customer. 
+
+NOTE 2: Statutory and regulatory requirements can be expressed as legal requirements.`
+    },
+    "2": {
+      title: "Normative references",
+      content: `The following documents, in whole or in part, are normatively referenced in this document and are indispensable for its application. For dated references, only the edition cited applies. For undated references, the latest edition of the referenced document (including any amendments) applies. 
+
+ISO 9000:2015, Quality management systems — Fundamentals and vocabulary`
+    },
+    "3": {
+      title: "Terms and definitions",
+      content: `For the purposes of this document, the terms and definitions given in ISO 9000:2015 apply.`
+    }
+  }
 
   // Get current auditor ID
   useEffect(() => {
@@ -171,58 +214,108 @@ export default function RequirementsTabs({
 
   // Organize sections into hierarchy based on code
   useEffect(() => {
-    if (!sections || !Array.isArray(sections) || sections.length === 0) return
-
-    // First, map all existing sections
+    // First, ensure static main sections 1-10 are always present
     const existingSections = new Map()
-    sections.forEach(section => {
-      existingSections.set(section.code, section)
-    })
+    if (sections && Array.isArray(sections) && sections.length > 0) {
+      sections.forEach(section => {
+        existingSections.set(section.code, section)
+      })
+    }
 
-    // Create organized sections with virtual parents
+    // Create organized sections with static main sections and dynamic subsections
     const organized = []
     const virtualSections = new Map() // Track virtual parent sections we create
 
-    sections.forEach(section => {
-      const code = section.code || ""
-      const levels = code.split(".").filter(Boolean)
-
-      // Create the actual section
-      const sectionData = {
-        ...section,
-        code,
-        level: levels.length,
-        parentCode: levels.length > 1 ? levels.slice(0, -1).join(".") : null,
-        isVirtual: false,
-        sectionRequirements: requirements.filter(req =>
-          req.sectionId === section.id || req.section?.id === section.id
-        )
-      }
-      organized.push(sectionData)
-
-      // If this section has a parent that doesn't exist, create virtual parent sections
-      if (levels.length > 1) {
-        for (let i = 1; i < levels.length; i++) {
-          const parentCode = levels.slice(0, i).join(".")
-
-          // If parent doesn't exist and we haven't created it yet, create virtual parent
-          if (!existingSections.has(parentCode) && !virtualSections.has(parentCode)) {
-            const parentLevels = parentCode.split(".").filter(Boolean)
-            const parentData = {
-              id: `virtual-${parentCode}`, // Virtual ID
-              code: parentCode,
-              name: `Section ${parentCode}`, // Generic name, can be improved
-              level: parentLevels.length,
-              parentCode: parentLevels.length > 1 ? parentLevels.slice(0, -1).join(".") : null,
-              isVirtual: true,
-              sectionRequirements: [] // Virtual sections have no requirements directly
-            }
-            virtualSections.set(parentCode, parentData)
-            organized.push(parentData)
-          }
+    // Add static main sections 1-10 (always present)
+    staticMainSections.forEach(staticSection => {
+      const existingSection = existingSections.get(staticSection.code)
+      if (existingSection) {
+        // If section exists in database, use it
+        const code = existingSection.code || staticSection.code
+        const levels = code.split(".").filter(Boolean)
+        const sectionData = {
+          ...existingSection,
+          code,
+          level: levels.length,
+          parentCode: null, // Main sections have no parent
+          isVirtual: false,
+          isStatic: true, // Mark as static main section
+          sectionRequirements: (requirements && Array.isArray(requirements) ? requirements.filter(req =>
+            req.sectionId === existingSection.id || req.section?.id === existingSection.id
+          ) : [])
         }
+        organized.push(sectionData)
+      } else {
+        // If section doesn't exist in database, create static section
+        const sectionData = {
+          id: `static-${staticSection.code}`,
+          code: staticSection.code,
+          name: staticSection.name,
+          level: 1,
+          parentCode: null,
+          isVirtual: false,
+          isStatic: true, // Mark as static main section
+          sectionRequirements: [] // Static sections 1-3 have no requirements from database
+        }
+        organized.push(sectionData)
       }
     })
+
+    // Add dynamic subsections from database (those that are children of main sections 4-10)
+    if (sections && Array.isArray(sections) && sections.length > 0) {
+      sections.forEach(section => {
+        const code = section.code || ""
+        const levels = code.split(".").filter(Boolean)
+        const firstPart = levels[0]
+
+        // Skip main sections 1-10 (already added above)
+        if (levels.length === 1 && ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"].includes(firstPart)) {
+          return // Already handled
+        }
+
+        // This is a subsection - add it
+        const sectionData = {
+          ...section,
+          code,
+          level: levels.length,
+          parentCode: levels.length > 1 ? levels.slice(0, -1).join(".") : null,
+          isVirtual: false,
+          isStatic: false,
+          sectionRequirements: (requirements && Array.isArray(requirements) ? requirements.filter(req =>
+            req.sectionId === section.id || req.section?.id === section.id
+          ) : [])
+        }
+        organized.push(sectionData)
+
+        // If this section has a parent that doesn't exist, create virtual parent sections
+        if (levels.length > 1) {
+          for (let i = 1; i < levels.length; i++) {
+            const parentCode = levels.slice(0, i).join(".")
+
+            // Check if parent is a main section (1-10)
+            const parentFirstPart = parentCode.split(".")[0]
+            const isMainSection = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"].includes(parentFirstPart) && parentCode.split(".").length === 1
+
+            // If parent doesn't exist and we haven't created it yet, create virtual parent
+            if (!existingSections.has(parentCode) && !virtualSections.has(parentCode) && !isMainSection) {
+              const parentLevels = parentCode.split(".").filter(Boolean)
+              const parentData = {
+                id: `virtual-${parentCode}`,
+                code: parentCode,
+                name: `Section ${parentCode}`,
+                level: parentLevels.length,
+                parentCode: parentLevels.length > 1 ? parentLevels.slice(0, -1).join(".") : null,
+                isVirtual: true,
+                isStatic: false,
+                sectionRequirements: []
+              }
+              virtualSections.set(parentCode, parentData)
+              organized.push(parentData)
+            }
+          }
+        }
+      })
+    }
 
     // Sort by code
     organized.sort((a, b) => {
@@ -248,11 +341,12 @@ export default function RequirementsTabs({
       }
     })
 
-    console.log("Organized sections with virtual parents:", organized.map(s => ({
+    console.log("Organized sections with static and dynamic:", organized.map(s => ({
       id: s.id,
       code: s.code,
       name: s.name,
       isVirtual: s.isVirtual,
+      isStatic: s.isStatic,
       level: s.level,
       parentCode: s.parentCode,
       requirementsCount: s.sectionRequirements.length
@@ -260,15 +354,12 @@ export default function RequirementsTabs({
 
     setOrganizedSections(organized)
 
-    // Find the minimum level (top-most level in the data)
-    const minLevel = Math.min(...organized.map(s => s.level))
-
-    // Set first top-level section (1, 2, 3, 4, 5) as active if none is selected
+    // Set first top-level section (1) as active if none is selected
     const currentActive = activeSection
     if (!currentActive && organized.length > 0) {
       const firstTopLevel = organized.find(s =>
-        s.level === 1 && ["1", "2", "3", "4", "5"].includes(s.code.split(".")[0])
-      ) || organized.find(s => s.level === minLevel)
+        s.level === 1 && s.code === "1"
+      ) || organized.find(s => s.level === 1)
       if (firstTopLevel) {
         setActiveSection(firstTopLevel.code)
         // Also expand the first top-level section
@@ -354,7 +445,7 @@ export default function RequirementsTabs({
 
     try {
       if (isAuditor) {
-        // Auditors can only reply to existing responses
+        // External auditors can only reply to existing responses
         if (editingResponse?.parentResponseId || editingResponse?.id) {
           const { createRequirementResponseReply } = await import("../lib/auditor-api")
           const parentResponseId = editingResponse?.parentResponseId || editingResponse?.id
@@ -364,7 +455,7 @@ export default function RequirementsTabs({
           closeResponseDialog()
           return
         } else {
-          alert("Auditors can only reply to existing responses")
+          alert("External auditors can only reply to existing responses")
           return
         }
       }
@@ -395,13 +486,13 @@ export default function RequirementsTabs({
     }
   }
 
-  // Get status for a requirement (defaults to 0 if not found) - for company owners
+  // Get status for a requirement (defaults to 0 if not found) - for internal auditors and company managers
   const getRequirementStatus = (requirementId) => {
     const statusObj = requirementStatuses.find(s => s.requirement?.id === requirementId)
     return statusObj ? statusObj.status : 0
   }
 
-  // Get audit status for a requirement (defaults to 0 if not found) - for auditors
+  // Get audit status for a requirement (defaults to 0 if not found) - for external auditors
   const getAuditStatus = (requirementId) => {
     const statusObj = auditStatuses.find(s => s.requirementId === requirementId)
     return statusObj ? statusObj.status : 0
@@ -421,7 +512,7 @@ export default function RequirementsTabs({
     }
   }
 
-  // Toggle status dropdown (for company owners)
+  // Toggle status dropdown (for internal auditors and company managers)
   const toggleStatusDropdown = (requirementId) => {
     if (isAuditor || !onUpdateStatus) return
     setStatusDropdowns(prev => ({
@@ -430,7 +521,7 @@ export default function RequirementsTabs({
     }))
   }
 
-  // Toggle audit status dropdown (for auditors and company owners)
+  // Toggle audit status dropdown (for external auditors and internal users)
   const toggleAuditStatusDropdown = (requirementId) => {
     if (!onUpdateAuditStatus) return
     setStatusDropdowns(prev => ({
@@ -439,7 +530,7 @@ export default function RequirementsTabs({
     }))
   }
 
-  // Handle status update (for company owners)
+  // Handle status update (for internal auditors and company managers)
   const handleStatusUpdate = async (requirementId, newStatus) => {
     if (!onUpdateStatus) return
     try {
@@ -453,7 +544,7 @@ export default function RequirementsTabs({
     }
   }
 
-  // Handle audit status update (for auditors and company owners)
+  // Handle audit status update (for external auditors and internal users)
   const handleAuditStatusUpdate = async (requirementId, newStatus) => {
     if (!onUpdateAuditStatus) return
     try {
@@ -603,13 +694,18 @@ export default function RequirementsTabs({
     return { bg: "bg-blue-100", text: "text-blue-800", icon: MessageSquare, label: rating }
   }
 
-  // Section name mapping for top-level sections (1-5)
+  // Section name mapping for top-level sections (1-10)
   const topLevelSectionNames = {
-    "1": "Context of the organization",
-    "2": "Leadership",
-    "3": "Planning",
-    "4": "Support",
-    "5": "Operation"
+    "1": "Scope",
+    "2": "Normative references",
+    "3": "Terms and definitions",
+    "4": "Context of the organization",
+    "5": "Leadership",
+    "6": "Planning",
+    "7": "Support",
+    "8": "Operation",
+    "9": "Performance evaluation",
+    "10": "Improvement"
   }
 
   // Find minimum level to determine top-level sections
@@ -617,14 +713,14 @@ export default function RequirementsTabs({
     ? Math.min(...organizedSections.map(s => s.level))
     : 1
 
-  // Get top-level sections (those starting with just "1", "2", "3", "4", "5")
-  // These are sections where the first part of the code is a single digit
+  // Get top-level sections (those starting with "1", "2", "3", "4", "5", "6", "7", "8", "9", "10")
+  // These are the main sections (level 1)
   const topLevelSections = organizedSections
     .filter(s => {
       const codeParts = s.code.split(".")
       const firstPart = codeParts[0]
-      // Top-level sections are those where first part is "1", "2", "3", "4", or "5" and level is 1
-      return ["1", "2", "3", "4", "5"].includes(firstPart) && s.level === 1
+      // Top-level sections are those where first part is "1"-"10" and level is 1
+      return ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"].includes(firstPart) && s.level === 1
     })
     .sort((a, b) => {
       const aNum = parseInt(a.code.split(".")[0], 10)
@@ -669,15 +765,8 @@ export default function RequirementsTabs({
   console.log("All organized sections:", organizedSections.map(s => ({ code: s.code, name: s.name, level: s.level, parentCode: s.parentCode })))
   console.log("Top-level sections:", topLevelSections.map(s => ({ code: s.code, name: s.name, level: s.level })))
 
-  if (!sections || !Array.isArray(sections) || sections.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-        <p className="text-gray-500">No sections available</p>
-        <p className="text-gray-400 text-sm mt-2">Sections will appear here once they are loaded</p>
-      </div>
-    )
-  }
+  // Always show the dashboard - static sections 1-10 are always present
+  // Even if no sections from database, we still show static sections
 
   const renderSection = (section, depth = 0, minLevel = 1) => {
     const isExpanded = expandedSections.has(section.code)
@@ -685,8 +774,8 @@ export default function RequirementsTabs({
     const hasChildren = organizedSections.some(s => s.parentCode === section.code)
     const children = organizedSections.filter(s => s.parentCode === section.code)
 
-    // Check if this is a top-level section (1, 2, 3, 4, 5)
-    const isTopLevelSection = section.level === 1 && ["1", "2", "3", "4", "5"].includes(section.code.split(".")[0])
+    // Check if this is a top-level section (1-10)
+    const isTopLevelSection = section.level === 1 && ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"].includes(section.code.split(".")[0])
 
     // Get section name - use mapping for top-level sections
     const sectionName = isTopLevelSection && topLevelSectionNames[section.code]
@@ -708,12 +797,20 @@ export default function RequirementsTabs({
               toggleExpand(section.code)
               // Set as active
               setActiveSection(section.code)
+              // Call scroll callback if provided
+              if (onSectionClick) {
+                onSectionClick()
+              }
             } else {
               // For other sections, toggle expand if has children, and set as active
               if (hasChildren) {
                 toggleExpand(section.code)
               }
               setActiveSection(section.code)
+              // Call scroll callback if provided
+              if (onSectionClick) {
+                onSectionClick()
+              }
             }
           }}
           className={`w-full flex items-center justify-between p-3 rounded-lg mb-1 transition-all duration-200 ${isTopLevelSection
@@ -905,7 +1002,7 @@ export default function RequirementsTabs({
                       <h3 className="text-2xl font-bold text-gray-900">
                         {(() => {
                           const section = organizedSections.find(s => s.code === activeSection)
-                          const isTopLevel = section && section.level === 1 && ["1", "2", "3", "4", "5"].includes(activeSection.split(".")[0])
+                          const isTopLevel = section && section.level === 1 && ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"].includes(activeSection.split(".")[0])
                           return isTopLevel && topLevelSectionNames[activeSection]
                             ? topLevelSectionNames[activeSection]
                             : (section?.name || activeSection)
@@ -914,7 +1011,11 @@ export default function RequirementsTabs({
                       <p className="text-gray-600 text-sm mt-1">
                         {(() => {
                           const section = organizedSections.find(s => s.code === activeSection)
-                          const isTopLevel = section && section.level === 1 && ["1", "2", "3", "4", "5"].includes(activeSection.split(".")[0])
+                          const isTopLevel = section && section.level === 1 && ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"].includes(activeSection.split(".")[0])
+                          const isStaticSection = ["1", "2", "3"].includes(activeSection)
+                          if (isStaticSection) {
+                            return "Static content section"
+                          }
                           const requirements = isTopLevel && expandedSections.has(activeSection)
                             ? getAllRequirementsForSection(activeSection)
                             : (section?.sectionRequirements || [])
@@ -925,14 +1026,42 @@ export default function RequirementsTabs({
                   </div>
                 </div>
 
+                {/* Static Content for Sections 1-3 */}
+                {(() => {
+                  const section = organizedSections.find(s => s.code === activeSection)
+                  const isStaticSection = section && ["1", "2", "3"].includes(activeSection)
+                  
+                  if (isStaticSection && staticContent[activeSection]) {
+                    return (
+                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-indigo-200 shadow-sm">
+                        <div className="prose prose-sm max-w-none">
+                          <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                            {staticContent[activeSection].title}
+                          </h4>
+                          <div className="text-gray-700 whitespace-pre-line leading-relaxed">
+                            {staticContent[activeSection].content}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  }
+                  return null
+                })()}
+
                 {/* Requirements List */}
                 <div className="space-y-4">
                   {(() => {
                     const section = organizedSections.find(s => s.code === activeSection)
                     if (!section) return []
 
-                    const isTopLevel = section.level === 1 && ["1", "2", "3", "4", "5"].includes(activeSection.split(".")[0])
+                    const isTopLevel = section.level === 1 && ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"].includes(activeSection.split(".")[0])
                     const isRealSection = !section.isVirtual // Check if section is real (from database)
+                    const isStaticSection = ["1", "2", "3"].includes(activeSection)
+                    
+                    // Don't show requirements for static sections 1-3
+                    if (isStaticSection) {
+                      return null
+                    }
 
                     // For top-level sections:
                     // - If real section: show its direct requirements + children when expanded
@@ -942,15 +1071,27 @@ export default function RequirementsTabs({
                     let requirements = []
 
                     if (isTopLevel) {
-                      // Top-level sections (1-5) should only show their DIRECT requirements
-                      // They should NOT show requirements from subsections
-                      // Users need to click on subsections to see their requirements
+                      // Top-level sections (4-10) should show their DIRECT requirements and subsections
+                      // Sections 1-3 are static and handled above
                       if (expandedSections.has(activeSection)) {
-                        // When expanded, only show direct requirements of this section
-                        // Do NOT include requirements from child subsections
-                        requirements = isRealSection
+                        // When expanded, show direct requirements of this section
+                        // Also include requirements from immediate child subsections
+                        const directRequirements = isRealSection
                           ? section.sectionRequirements || []
-                          : [] // Virtual sections have no direct requirements
+                          : []
+                        
+                        // Get requirements from immediate child subsections
+                        const childSections = organizedSections.filter(s => 
+                          s.parentCode === activeSection && !s.isVirtual
+                        )
+                        const childRequirements = childSections.flatMap(child => child.sectionRequirements || [])
+                        
+                        // Combine and deduplicate
+                        const allRequirements = [...directRequirements, ...childRequirements]
+                        const uniqueRequirements = Array.from(
+                          new Map(allRequirements.map(req => [req.id, req])).values()
+                        )
+                        requirements = uniqueRequirements
                       } else {
                         // Not expanded: show nothing for top-level sections
                         requirements = []
@@ -998,7 +1139,7 @@ export default function RequirementsTabs({
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
-                              {/* Status Dropdown - Only for company owners */}
+                              {/* Status Dropdown - Only for internal auditors and company managers */}
                               {!isAuditor && onUpdateStatus && (
                                 <div className="relative status-dropdown-container" style={{ zIndex: statusDropdowns[requirement.id] ? 1000 : 'auto' }}>
                                   <button
@@ -1044,23 +1185,23 @@ export default function RequirementsTabs({
                                   )}
                                 </div>
                               )}
-                              {/* Audit Status - Read-only for company owners, editable for auditors */}
+                              {/* Audit Status - Read-only for internal users, editable for external auditors */}
                               {(!isAuditor && auditStatuses.length > 0) || (isAuditor && onUpdateAuditStatus) ? (
                                 <>
                                   {!isAuditor ? (
-                                    // Read-only display for company owners
-                                    <div className={`px-3 py-1.5 rounded-lg text-sm font-medium border-2 flex items-center gap-2 ${getStatusLabel(getAuditStatus(requirement.id)).color}`} title="Auditor Status (Read-only)">
+                                    // Read-only display for internal auditors and company managers
+                                    <div className={`px-3 py-1.5 rounded-lg text-sm font-medium border-2 flex items-center gap-2 ${getStatusLabel(getAuditStatus(requirement.id)).color}`} title="External Auditor Status (Read-only)">
                                       <span>Audit: {getStatusLabel(getAuditStatus(requirement.id)).label}</span>
                                     </div>
                                   ) : (
-                                    // Editable dropdown for auditors (No/TSE/Yes)
+                                    // Editable dropdown for external auditors (No/TSE/Yes)
                                     <div className="relative status-dropdown-container" style={{ zIndex: statusDropdowns[`audit-${requirement.id}`] ? 1000 : 'auto' }}>
                                       <button
                                         onClick={() => toggleAuditStatusDropdown(requirement.id)}
                                         className={`px-3 py-1.5 rounded-lg text-sm font-medium border-2 transition-all duration-200 flex items-center gap-2 ${getStatusLabel(getAuditStatus(requirement.id)).color
                                           } hover:shadow-md relative`}
                                         style={{ zIndex: statusDropdowns[`audit-${requirement.id}`] ? 1001 : 'auto' }}
-                                        title="Auditor Status"
+                                        title="External Auditor Status"
                                       >
                                         <span>{getStatusLabel(getAuditStatus(requirement.id)).label}</span>
                                         {statusDropdowns[`audit-${requirement.id}`] ? (
@@ -1144,17 +1285,17 @@ export default function RequirementsTabs({
                                     
                                     // Render conversation thread
                                     const renderResponse = (response, depth = 0) => {
-                                      const isCompanyOwner = response.createdByUserRole === "COMPANY_OWNER"
+                                      const isInternalUser = response.createdByUserRole === "INTERNAL_AUDITOR" || response.createdByUserRole === "COMPANY_MANAGER"
                                       const isCurrentUser = response.createdByUserId === parseInt(localStorage.getItem("userId") || "0")
                                       
                                       return (
                                         <div key={response.id} className={`${depth > 0 ? "ml-6 mt-3 border-l-2 border-indigo-200 pl-4" : ""}`}>
-                                          <div className={`rounded-lg p-3 ${isCompanyOwner ? "bg-indigo-50 border border-indigo-200" : "bg-purple-50 border border-purple-200"}`}>
+                                          <div className={`rounded-lg p-3 ${isInternalUser ? "bg-indigo-50 border border-indigo-200" : "bg-purple-50 border border-purple-200"}`}>
                                             <div className="flex items-start justify-between gap-3 mb-2">
                                               <div className="flex-1">
                                                 <div className="flex items-center gap-2 mb-1">
-                                                  <span className={`text-xs font-medium ${isCompanyOwner ? "text-indigo-700" : "text-purple-700"}`}>
-                                                    {response.createdByUserName || (isCompanyOwner ? "Company Owner" : "Auditor")}
+                                                  <span className={`text-xs font-medium ${isInternalUser ? "text-indigo-700" : "text-purple-700"}`}>
+                                                    {response.createdByUserName || (isInternalUser ? "Internal User" : "External Auditor")}
                                                   </span>
                                                   <span className="text-xs text-gray-500">
                                                     {response.createdAt ? new Date(response.createdAt).toLocaleString() : ""}
@@ -1167,7 +1308,7 @@ export default function RequirementsTabs({
                                             </div>
                                             
                                             {/* Reply and Update buttons - show side by side */}
-                                            {((isAuditor && isCompanyOwner) || (!isAuditor)) && (
+                                            {((isAuditor && isInternalUser) || (!isAuditor)) && (
                                               <div className="mt-2 flex items-center gap-2">
                                                 <button
                                                   onClick={() => openResponseDialog(requirement.id, null, response.id)}
@@ -1177,7 +1318,7 @@ export default function RequirementsTabs({
                                                   Reply
                                                 </button>
                                                 
-                                                {/* Update button - only for company owners on their own top-level responses */}
+                                                {/* Update button - only for internal auditors and company managers on their own top-level responses */}
                                                 {!isAuditor && isCurrentUser && !response.parentResponseId && (
                                                   <button
                                                     onClick={() => openResponseDialog(requirement.id, response)}
@@ -1430,8 +1571,8 @@ export default function RequirementsTabs({
                                         })()}
 
                                         {/* Existing Review Display */}
-                                        {/* For company owners: only show when expandedReviewDocs includes this doc */}
-                                        {/* For auditors: do NOT show reviews */}
+                                        {/* For internal auditors and company managers: only show when expandedReviewDocs includes this doc */}
+                                        {/* For external auditors: do NOT show reviews */}
                                         {!isAuditor && hasReview && !isReviewing && latestReview && expandedReviewDocs.has(doc.id) && (
                                           <div className="mt-3 pt-3 border-t border-gray-200">
                                             <h4 className="text-sm font-semibold text-gray-800 mb-3">Reviews:</h4>

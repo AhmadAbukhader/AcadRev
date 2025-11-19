@@ -21,5 +21,7 @@ public class SignUpRequest {
     @JsonProperty("role")
     private String role;
 
+    @JsonProperty("companyId")
+    private Integer companyId;
 
 }

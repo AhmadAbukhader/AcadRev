@@ -26,14 +26,14 @@ public class AuditReviewService {
 
     public AuditReview reviewDocument(int documentId, String rating, String comment) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User auditor = (User) auth.getPrincipal();
+        User externalAuditor = (User) auth.getPrincipal();
 
         Document document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new RuntimeException("Document not found"));
 
         AuditReview auditReview = AuditReview.builder()
                 .document(document)
-                .auditor(auditor)
+                .auditor(externalAuditor)
                 .rating(rating)
                 .comments(comment)
                 .reviewedAt(LocalDateTime.now())
@@ -63,7 +63,7 @@ public class AuditReviewService {
         AuditReview existingReview = auditReviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ResourceNotFoundException("Review not found with ID: " + reviewId));
 
-        // Check if the current user is the auditor who created this review
+        // Check if the current user is the external auditor who created this review
         if (!existingReview.getAuditor().getId().equals(currentUser.getId())) {
             throw new UnauthorizedAccessException("You are not authorized to update this review");
         }
@@ -85,7 +85,7 @@ public class AuditReviewService {
 
         // Check if the current user is requesting their own reviews or is an admin
         if (!currentUser.getId().equals(auditorId)) {
-            throw new UnauthorizedAccessException("You are not authorized to view other auditors' reviews");
+            throw new UnauthorizedAccessException("You are not authorized to view other external auditors' reviews");
         }
 
         return auditReviewRepository.findByAuditorId(auditorId);

@@ -1,20 +1,20 @@
 import api from "./api"
 
-// Company owners need to know their company ID to use the APIs
-// Since there's no backend endpoint for company owners to get their company profile,
+// Internal auditors and company managers need to know their company ID to use the APIs
+// Since there's no backend endpoint for internal auditors and company managers to get their company profile,
 // we'll need to store the company ID when the user logs in or create their profile
 
 export const getMyCompanyProfile = async () => {
-    // Company owners can't use /api/v1/company-profile/all (AUDITOR only)
-    // Company owners can't use /api/v1/company-profile/{id} (AUDITOR only)
-    // This is a backend limitation - company owners have no way to get their company profile
-    throw new Error("Company owners cannot get their company profile - backend limitation")
+    // Internal auditors and company managers can't use /api/v1/company-profile/all (EXTERNAL_AUDITOR only)
+    // Internal auditors and company managers can't use /api/v1/company-profile/{id} (EXTERNAL_AUDITOR only)
+    // This is a backend limitation - internal auditors and company managers have no way to get their company profile
+    throw new Error("Internal auditors and company managers cannot get their company profile - backend limitation")
 }
 
 export const getMyDocuments = async (companyId) => {
-    // Company owners must provide their company ID
+    // Internal auditors and company managers must provide their company ID
     if (!companyId) {
-        throw new Error("Company ID is required for company owners")
+        throw new Error("Company ID is required for internal auditors and company managers")
     }
     const response = await api.get(`/api/v1/company-profile/${companyId}/documents`)
     return response.data
@@ -77,33 +77,16 @@ export const getDocumentReviews = async (documentId) => {
     }
 }
 
-// Helper function to get current user's company by trying to get all companies
-// This is a workaround since company owners can't directly get their own company
+// Get current user's company
+// For managers: the company they created
+// For internal auditors: the company they're assigned to
 export const getCurrentUserCompany = async () => {
-    const userId = localStorage.getItem("userId")
-
-    if (!userId) {
-        throw new Error("User ID not found")
-    }
-
     try {
-        // Try to fetch all companies (this endpoint is AUDITOR only, but we'll try)
-        const response = await api.get("/api/v1/company-profile/all")
-        const allCompanies = response.data
-
-        // Find the company that belongs to the current user
-        const userCompany = allCompanies.find(company => company.user?.id === parseInt(userId))
-
-        if (userCompany) {
-            return userCompany
-        }
-
-        throw new Error("Company not found for current user")
+        const response = await api.get("/api/v1/company-profile/my-company")
+        return response.data
     } catch (error) {
-        if (error.response?.status === 403 || error.response?.status === 401) {
-            // Permission denied - user doesn't have access to /all endpoint
-            // This means we can't check if they have a company
-            throw new Error("Cannot check company status - permission denied")
+        if (error.response?.status === 404) {
+            throw new Error("No company profile found")
         }
         throw error
     }
@@ -119,12 +102,21 @@ export const updateCompany = async (id, data) => {
     return response.data
 }
 
+// Alias for consistency
+export const updateCompanyProfile = updateCompany
+
 export const deleteCompany = async (id) => {
     const response = await api.delete(`/api/v1/company-profile/${id}`)
     return response.data
 }
 
-// Auditor functions (these work because auditors can use /api/v1/company-profile/all)
+// Get companies for signup (public endpoint - no auth required)
+export const getCompaniesForSignup = async () => {
+    const response = await api.get("/api/v1/company-profile/list-for-signup")
+    return response.data
+}
+
+// External auditor functions (these work because external auditors can use /api/v1/company-profile/all)
 export const getAllCompanies = async () => {
     const response = await api.get("/api/v1/company-profile/all")
     return response.data
@@ -247,7 +239,7 @@ export const updateRequirementResponse = async (responseId, responseText) => {
     return response.data
 }
 
-// Requirement Auditing API (for company owners to see auditor progress and statuses)
+// Requirement Auditing API (for internal auditors and company managers to see external auditor progress and statuses)
 export const getAuditProgress = async (companyId) => {
     const response = await api.get(`/api/v1/requirement-auditing/progress/${companyId}`)
     return response.data || 0

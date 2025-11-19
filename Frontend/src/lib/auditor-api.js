@@ -1,5 +1,11 @@
 import api from "./api"
 
+// Get companies assigned to external auditor (replaces getAllCompanies for external auditors)
+export const getAssignedCompanies = async (auditorId) => {
+    const response = await api.get(`/api/v1/auditor-assignments/external-auditor/${auditorId}/companies`)
+    return response.data
+}
+
 export const getAllCompanies = async () => {
     const response = await api.get("/api/v1/company-profile/all")
     return response.data
@@ -61,7 +67,7 @@ export const updateReview = async (reviewId, rating, comment) => {
     return response.data
 }
 
-export const getAuditorReviews = async (auditorId) => {
+export const getExternalAuditorReviews = async (auditorId) => {
     const response = await api.get(`/api/v1/audit-review/auditor/${auditorId}`)
     return response.data
 }
@@ -80,8 +86,8 @@ export const getDocumentMetadata = async (documentId) => {
 
 export const hasAlreadyReviewed = async (documentId, auditorId) => {
     try {
-        // Get all reviews by this auditor
-        const reviews = await getAuditorReviews(auditorId)
+        // Get all reviews by this external auditor
+        const reviews = await getExternalAuditorReviews(auditorId)
         // Check if any of the reviews are for this document
         return reviews.some(review => review.document?.id === documentId)
     } catch {
@@ -122,7 +128,7 @@ export const getRequirementDocuments = async (requirementId, companyId = null) =
     return documents
 }
 
-// Requirement Response API (read-only for auditors, but can reply)
+// Requirement Response API (read-only for external auditors, but can reply)
 export const getRequirementResponse = async (companyId, requirementId) => {
     try {
         const response = await api.get(`/api/v1/requirement-responses/${companyId}/${requirementId}`)

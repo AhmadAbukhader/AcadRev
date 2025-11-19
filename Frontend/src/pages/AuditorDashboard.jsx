@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   LogOut,
@@ -23,7 +23,7 @@ import {
   Check,
   XCircle,
 } from "lucide-react"
-import { getAllCompanies, getCompanyDocuments, reviewDocument, hasAlreadyReviewed, downloadFile, getAllSections, getAllRequirements, getRequirementDocuments, getRequirementsWithAuditStatus, upsertAudit } from "../lib/auditor-api"
+import { getAllCompanies, getCompanyDocuments, reviewDocument, hasAlreadyReviewed, downloadFile, getAllSections, getAllRequirements, getRequirementDocuments, getRequirementsWithAuditStatus, upsertAudit, getAssignedCompanies } from "../lib/auditor-api"
 import RequirementsTabs from "../components/RequirementsTabs"
 
 export default function AuditorDashboard() {
@@ -40,6 +40,9 @@ export default function AuditorDashboard() {
   const [sections, setSections] = useState([])
   const [requirements, setRequirements] = useState([])
   const [auditStatuses, setAuditStatuses] = useState([])
+  
+  // Ref for scrolling to requirements section
+  const requirementsSectionRef = useRef(null)
 
   const [reviewForm, setReviewForm] = useState({
     rating: "ACCEPTED",
@@ -50,7 +53,7 @@ export default function AuditorDashboard() {
     const token = localStorage.getItem("token")
     const userRole = localStorage.getItem("userRole")
 
-    if (!token || userRole !== "AUDITOR") {
+    if (!token || userRole !== "EXTERNAL_AUDITOR") {
       navigate("/")
       return
     }
@@ -60,10 +63,28 @@ export default function AuditorDashboard() {
 
   const fetchCompanies = async () => {
     try {
-      const data = await getAllCompanies()
-      setCompanies(data)
+      const userId = localStorage.getItem("userId")
+      if (!userId) {
+        setError("User ID not found")
+        setLoading(false)
+        return
+      }
+
+      // Get companies assigned to this external auditor
+      const assignmentsData = await getAssignedCompanies(parseInt(userId))
+      
+      // Extract company profiles from assignments
+      const companiesData = assignmentsData.map(assignment => ({
+        id: assignment.companyProfileId,
+        name: assignment.companyName,
+        // Note: Other fields might not be available from assignment data
+        // We'll need to fetch them when a company is selected
+      }))
+      
+      setCompanies(companiesData)
     } catch (err) {
-      setError(err.message)
+      console.error("Error fetching assigned companies:", err)
+      setError(err.message || "Failed to load assigned companies")
     } finally {
       setLoading(false)
     }
@@ -236,7 +257,7 @@ export default function AuditorDashboard() {
                 <FileText className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">Auditor Dashboard</h1>
+                <h1 className="text-xl font-bold text-gray-900">External Auditor Dashboard</h1>
                 <p className="text-sm text-gray-600">
                   {selectedCompany ? selectedCompany.companyName : "Review company documents"}
                 </p>
@@ -271,7 +292,9 @@ export default function AuditorDashboard() {
             {companies.length === 0 ? (
               <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
                 <Building2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500 text-lg">No companies found</p>
+                <p className="text-gray-500 text-lg font-semibold">No Companies Assigned</p>
+                <p className="text-gray-400 mt-2">You haven't been assigned to any companies yet.</p>
+                <p className="text-gray-400 text-sm mt-1">Contact an internal auditor to get assigned to a company.</p>
               </div>
             ) : (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -393,7 +416,7 @@ export default function AuditorDashboard() {
             </div>
 
             {/* Requirements & Documents */}
-            <div className="bg-white rounded-2xl shadow-lg p-6 animate-slide-in" style={{ animationDelay: "0.1s" }}>
+            <div ref={requirementsSectionRef} className="bg-white rounded-2xl shadow-lg p-6 animate-slide-in" style={{ animationDelay: "0.1s" }}>
               <div className="mb-6">
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">Requirements & Documents</h2>
                 <p className="text-gray-600">Review and audit company documents by ISO 9001 requirements</p>
@@ -409,6 +432,18 @@ export default function AuditorDashboard() {
                 getRequirementDocuments={getRequirementDocuments}
                 auditStatuses={auditStatuses || []}
                 onUpdateAuditStatus={handleUpdateAuditStatus}
+                onSectionClick={() => {
+                  // Scroll to the top of requirements section when a section is clicked
+                  // Small delay to ensure content has rendered
+                  setTimeout(() => {
+                    if (requirementsSectionRef.current) {
+                      requirementsSectionRef.current.scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'start' 
+                      })
+                    }
+                  }, 100)
+                }}
               />
             </div>
           </div>

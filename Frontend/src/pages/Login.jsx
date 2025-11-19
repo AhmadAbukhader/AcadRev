@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { LogIn, UserPlus, Building2, FileCheck, Eye, EyeOff } from "lucide-react"
 import { login, signup } from "../lib/auth"
+import { getCompaniesForSignup } from "../lib/company-api"
 
 export default function Login() {
     const navigate = useNavigate()
@@ -15,15 +16,18 @@ export default function Login() {
 
         if (token && userRole) {
             // Redirect to appropriate dashboard based on role
-            if (userRole === "COMPANY_OWNER") {
+            if (userRole === "INTERNAL_AUDITOR") {
                 navigate("/company-dashboard")
-            } else if (userRole === "AUDITOR") {
+            } else if (userRole === "EXTERNAL_AUDITOR") {
                 navigate("/auditor-dashboard")
+            } else if (userRole === "COMPANY_MANAGER") {
+                navigate("/manager-dashboard")
             }
         }
     }, [navigate])
+
     const [isLogin, setIsLogin] = useState(true)
-    const [userType, setUserType] = useState("COMPANY_OWNER")
+    const [userType, setUserType] = useState("INTERNAL_AUDITOR")
     const [showPassword, setShowPassword] = useState(false)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState("")
@@ -34,6 +38,29 @@ export default function Login() {
         name: "",
         companyName: "",
     })
+
+    const [companies, setCompanies] = useState([])
+    const [selectedCompanyId, setSelectedCompanyId] = useState("")
+    const [loadingCompanies, setLoadingCompanies] = useState(false)
+
+    // Fetch companies when userType changes to INTERNAL_AUDITOR during signup
+    useEffect(() => {
+        const fetchCompanies = async () => {
+            if (!isLogin && userType === "INTERNAL_AUDITOR") {
+                setLoadingCompanies(true)
+                try {
+                    const companiesData = await getCompaniesForSignup()
+                    setCompanies(companiesData || [])
+                } catch (err) {
+                    console.error("Failed to load companies:", err)
+                    setCompanies([])
+                } finally {
+                    setLoadingCompanies(false)
+                }
+            }
+        }
+        fetchCompanies()
+    }, [isLogin, userType])
 
     const handleSubmit = async (e) => {
         e.preventDefault()
@@ -48,14 +75,17 @@ export default function Login() {
                     password: formData.password,
                     name: formData.name,
                     role: userType,
+                    ...(userType === "INTERNAL_AUDITOR" && { companyId: parseInt(selectedCompanyId) })
                 }
 
             const data = isLogin ? await login(payload) : await signup(payload)
 
-            if (data.user.role === "COMPANY_OWNER") {
+            if (data.user.role === "INTERNAL_AUDITOR") {
                 navigate("/company-dashboard")
-            } else if (data.user.role === "AUDITOR") {
+            } else if (data.user.role === "EXTERNAL_AUDITOR") {
                 navigate("/auditor-dashboard")
+            } else if (data.user.role === "COMPANY_MANAGER") {
+                navigate("/manager-dashboard")
             }
         } catch (err) {
             if (err.response?.data?.error) {
@@ -118,7 +148,7 @@ export default function Login() {
 
                                 <div className="bg-white/60 backdrop-blur-sm p-6 rounded-2xl shadow-lg transform hover:scale-105 transition-transform duration-300">
                                     <FileCheck className="w-10 h-10 text-purple-600 mb-3" />
-                                    <h3 className="font-semibold text-gray-900 mb-1">For Auditors</h3>
+                                    <h3 className="font-semibold text-gray-900 mb-1">For External Auditors</h3>
                                     <p className="text-sm text-gray-600">Review and audit documents efficiently</p>
                                 </div>
                             </div>
@@ -160,42 +190,60 @@ export default function Login() {
                             {!isLogin && (
                                 <div className="mb-6 animate-fade-in">
                                     <label className="block text-sm font-medium text-gray-700 mb-3">I am a</label>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-3 gap-3">
                                         <button
                                             type="button"
-                                            onClick={() => setUserType("COMPANY_OWNER")}
-                                            className={`p-4 rounded-xl border-2 transition-all duration-300 ${userType === "COMPANY_OWNER"
+                                            onClick={() => setUserType("INTERNAL_AUDITOR")}
+                                            className={`p-4 rounded-xl border-2 transition-all duration-300 ${userType === "INTERNAL_AUDITOR"
                                                 ? "border-indigo-600 bg-indigo-50 shadow-md"
                                                 : "border-gray-200 hover:border-indigo-300"
                                                 }`}
                                         >
                                             <Building2
-                                                className={`w-6 h-6 mx-auto mb-2 ${userType === "COMPANY_OWNER" ? "text-indigo-600" : "text-gray-400"
+                                                className={`w-6 h-6 mx-auto mb-2 ${userType === "INTERNAL_AUDITOR" ? "text-indigo-600" : "text-gray-400"
                                                     }`}
                                             />
                                             <span
-                                                className={`text-sm font-medium ${userType === "COMPANY_OWNER" ? "text-indigo-600" : "text-gray-600"
+                                                className={`text-xs font-medium ${userType === "INTERNAL_AUDITOR" ? "text-indigo-600" : "text-gray-600"
                                                     }`}
                                             >
-                                                Company
+                                                Internal Auditor
                                             </span>
                                         </button>
 
                                         <button
                                             type="button"
-                                            onClick={() => setUserType("AUDITOR")}
-                                            className={`p-4 rounded-xl border-2 transition-all duration-300 ${userType === "AUDITOR"
+                                            onClick={() => setUserType("EXTERNAL_AUDITOR")}
+                                            className={`p-4 rounded-xl border-2 transition-all duration-300 ${userType === "EXTERNAL_AUDITOR"
                                                 ? "border-purple-600 bg-purple-50 shadow-md"
                                                 : "border-gray-200 hover:border-purple-300"
                                                 }`}
                                         >
                                             <FileCheck
-                                                className={`w-6 h-6 mx-auto mb-2 ${userType === "AUDITOR" ? "text-purple-600" : "text-gray-400"}`}
+                                                className={`w-6 h-6 mx-auto mb-2 ${userType === "EXTERNAL_AUDITOR" ? "text-purple-600" : "text-gray-400"}`}
                                             />
                                             <span
-                                                className={`text-sm font-medium ${userType === "AUDITOR" ? "text-purple-600" : "text-gray-600"}`}
+                                                className={`text-xs font-medium ${userType === "EXTERNAL_AUDITOR" ? "text-purple-600" : "text-gray-600"}`}
                                             >
-                                                Auditor
+                                                External Auditor
+                                            </span>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => setUserType("COMPANY_MANAGER")}
+                                            className={`p-4 rounded-xl border-2 transition-all duration-300 ${userType === "COMPANY_MANAGER"
+                                                ? "border-green-600 bg-green-50 shadow-md"
+                                                : "border-gray-200 hover:border-green-300"
+                                                }`}
+                                        >
+                                            <Building2
+                                                className={`w-6 h-6 mx-auto mb-2 ${userType === "COMPANY_MANAGER" ? "text-green-600" : "text-gray-400"}`}
+                                            />
+                                            <span
+                                                className={`text-xs font-medium ${userType === "COMPANY_MANAGER" ? "text-green-600" : "text-gray-600"}`}
+                                            >
+                                                Company Manager
                                             </span>
                                         </button>
                                     </div>
@@ -219,18 +267,37 @@ export default function Login() {
                                     </div>
                                 )}
 
-                                {!isLogin && userType === "COMPANY_OWNER" && (
+                                {!isLogin && userType === "INTERNAL_AUDITOR" && (
                                     <div className="animate-fade-in">
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Company Name</label>
-                                        <input
-                                            type="text"
-                                            name="companyName"
-                                            value={formData.companyName}
-                                            onChange={handleChange}
-                                            required
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-300"
-                                            placeholder="Acme Corporation"
-                                        />
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Select Company *
+                                        </label>
+                                        {loadingCompanies ? (
+                                            <div className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 text-gray-500">
+                                                Loading companies...
+                                            </div>
+                                        ) : companies.length === 0 ? (
+                                            <div className="w-full px-4 py-3 border border-red-300 rounded-xl bg-red-50 text-red-700 text-sm">
+                                                No companies available. A manager must create a company first.
+                                            </div>
+                                        ) : (
+                                            <select
+                                                value={selectedCompanyId}
+                                                onChange={(e) => setSelectedCompanyId(e.target.value)}
+                                                required
+                                                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-300"
+                                            >
+                                                <option value="">Choose a company...</option>
+                                                {companies.map((company) => (
+                                                    <option key={company.id} value={company.id}>
+                                                        {company.name} - {company.industry}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        )}
+                                        <p className="mt-2 text-xs text-gray-600">
+                                            You will work for this company and cannot change it later.
+                                        </p>
                                     </div>
                                 )}
 

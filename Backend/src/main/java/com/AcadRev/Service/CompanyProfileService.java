@@ -6,6 +6,7 @@ import com.AcadRev.Exception.UnauthorizedAccessException;
 import com.AcadRev.Model.CompanyProfile;
 import com.AcadRev.Model.Document;
 import com.AcadRev.Model.User;
+import com.AcadRev.Model.UserType;
 import com.AcadRev.Repository.CompanyProfileRepository;
 import com.AcadRev.Repository.DocumentRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,10 +25,10 @@ public class CompanyProfileService {
 
     public CompanyProfile createProfile(CompanyProfileDto companyProfile) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User companyOwner = (User) auth.getPrincipal();
+        User currentUser = (User) auth.getPrincipal();
 
         CompanyProfile createdProfile = CompanyProfile.builder()
-                .user(companyOwner)
+                .user(currentUser)
                 .phone(companyProfile.getPhone())
                 .address(companyProfile.getAddress())
                 .name(companyProfile.getName())
@@ -44,6 +45,29 @@ public class CompanyProfileService {
     public CompanyProfile getCompany(int id) {
         return companyProfileRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Company not found with ID: " + id));
+    }
+
+    public CompanyProfile getMyCompany() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        User currentUser = (User) auth.getPrincipal();
+
+        // For COMPANY_MANAGER: find the company they created (where they are the owner)
+        if (currentUser.getRole().getRole() == UserType.COMPANY_MANAGER) {
+            return companyProfileRepository.findAll().stream()
+                    .filter(company -> company.getUser().getId().equals(currentUser.getId()))
+                    .findFirst()
+                    .orElseThrow(() -> new ResourceNotFoundException("You don't have a company profile yet"));
+        }
+
+        // For INTERNAL_AUDITOR: return the company they're assigned to
+        if (currentUser.getRole().getRole() == UserType.INTERNAL_AUDITOR) {
+            if (currentUser.getCompanyProfile() == null) {
+                throw new ResourceNotFoundException("You are not assigned to any company");
+            }
+            return currentUser.getCompanyProfile();
+        }
+
+        throw new UnauthorizedAccessException("Only internal auditors and managers can access their company");
     }
 
     public List<Document> getCompanyDocuments(int companyId) {

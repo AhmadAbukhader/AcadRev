@@ -29,11 +29,11 @@ public class RequirementAuditingService {
     private final UserRepository userRepository;
 
     public RequirementAuditingDTO upsertAudit(int requirementId, int companyId, int status) {
-        // Get authenticated auditor
+        // Get authenticated external auditor
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth.getName();
-        User auditor = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("Auditor not found"));
+        User externalAuditor = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("External auditor not found"));
 
         // Get requirement and company
         Requirement requirement = requirementRepository.findById(requirementId)
@@ -49,7 +49,7 @@ public class RequirementAuditingService {
 
         audit.setRequirement(requirement);
         audit.setCompanyProfile(company);
-        audit.setAuditor(auditor);
+        audit.setAuditor(externalAuditor);
         audit.setStatus(status);
 
         RequirementAuditing saved = auditingRepository.save(audit);

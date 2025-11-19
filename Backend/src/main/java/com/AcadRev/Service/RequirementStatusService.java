@@ -26,10 +26,10 @@ public class RequirementStatusService {
 
     public List<RequirementStatus> getStatuses() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User companyOwner = (User) auth.getPrincipal();
+        User currentUser = (User) auth.getPrincipal();
 
         List<RequirementStatus> requirementStatusList =
-                requirementStatusRepository.findByUserId(companyOwner.getId());
+                requirementStatusRepository.findByUserId(currentUser.getId());
 
         // If the user has no statuses yet, return default values in memory
         if (requirementStatusList.isEmpty()) {
@@ -41,7 +41,7 @@ public class RequirementStatusService {
             for (Requirement req : allRequirements) {
                 RequirementStatus defaultStatus = RequirementStatus.builder()
                         .requirement(req)
-                        .user(companyOwner)
+                        .user(currentUser)
                         .status(0) // Default value, not saved to DB
                         .build();
 
@@ -55,7 +55,7 @@ public class RequirementStatusService {
     }
     public String upsertStatus(int requirementId, int status) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User companyOwner = (User) auth.getPrincipal();
+        User currentUser = (User) auth.getPrincipal();
 
         // 1. Find the requirement
         Requirement requirement = requirementRepository.findById(requirementId)
@@ -64,12 +64,12 @@ public class RequirementStatusService {
 
         // 2. Find existing status for this user and requirement
         RequirementStatus requirementStatus =
-                requirementStatusRepository.findByRequirementIdAndUserId(requirementId, companyOwner.getId())
+                requirementStatusRepository.findByRequirementIdAndUserId(requirementId, currentUser.getId())
                         .orElseGet(() ->
                                 // Create a new in-memory RequirementStatus if it doesn't exist
                                 RequirementStatus.builder()
                                         .requirement(requirement)
-                                        .user(companyOwner)
+                                        .user(currentUser)
                                         .build()
                         );
 
@@ -84,11 +84,11 @@ public class RequirementStatusService {
 
     public int getStatusProgress() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User companyOwner = (User) auth.getPrincipal();
+        User currentUser = (User) auth.getPrincipal();
 
         // Fetch existing statuses for this user
         List<RequirementStatus> existingStatuses =
-                requirementStatusRepository.findByUserId(companyOwner.getId());
+                requirementStatusRepository.findByUserId(currentUser.getId());
 
         // Fetch all requirements
         List<Requirement> allRequirements = requirementRepository.findAll();
@@ -105,7 +105,7 @@ public class RequirementStatusService {
                         req.getId(),
                         RequirementStatus.builder()
                                 .requirement(req)
-                                .user(companyOwner)
+                                .user(currentUser)
                                 .status(0) // default
                                 .build()
                 ))

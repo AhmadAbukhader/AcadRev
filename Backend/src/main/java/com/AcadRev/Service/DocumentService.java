@@ -36,10 +36,10 @@ public class DocumentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Company not found with ID: " + companyId));
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User companyOwner = (User) auth.getPrincipal();
+        User currentUser = (User) auth.getPrincipal();
 
-        if (!company.getUser().getId().equals(companyOwner.getId())) {
-            throw new UnauthorizedAccessException("You are not the owner of this company");
+        if (!company.getUser().getId().equals(currentUser.getId())) {
+            throw new UnauthorizedAccessException("You are not authorized to upload documents for this company");
         }
 
         Section section = null;

@@ -71,7 +71,7 @@ public class RequirementResponseService {
         return dto;
     }
 
-    // 1️⃣ Create response (company owner)
+    // 1️⃣ Create response (internal auditor or company manager)
     public RequirementResponseDTO createResponse(int requirementId, int companyId, String responseText) {
         User currentUser = getCurrentUser();
         
@@ -97,7 +97,7 @@ public class RequirementResponseService {
         return buildResponseTree(saved);
     }
 
-    // 2️⃣ Create reply (auditor or company owner)
+    // 2️⃣ Create reply (external auditor, internal auditor, or company manager)
     public RequirementResponseDTO createReply(int parentResponseId, String responseText) {
         User currentUser = getCurrentUser();
         

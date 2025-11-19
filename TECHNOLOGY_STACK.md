@@ -169,9 +169,9 @@ This document describes all the technologies, frameworks, and tools used to buil
 - **Component-Based Architecture:**
   - Functional components with React Hooks
   - Separation of concerns:
-    - Pages (Login, CompanyDashboard, AuditorDashboard)
+    - Pages (Login, CompanyDashboard for internal auditors/managers, AuditorDashboard for external auditors)
     - Components (RequirementsTabs, DocumentPreviewModal, PDFPreviewModal)
-    - API layer (company-api.js, auditor-api.js, api.js)
+    - API layer (company-api.js for internal auditors/managers, auditor-api.js for external auditors, api.js)
     - Utilities (auth.js)
 
 ---
@@ -210,7 +210,7 @@ This document describes all the technologies, frameworks, and tools used to buil
 1. **Authentication & Authorization**
 
    - JWT-based authentication
-   - Role-based access (Company Owner, Auditor, Admin)
+   - Role-based access (Internal Auditor, External Auditor, Company Manager, Admin)
    - Protected API endpoints
 
 2. **File Management**
@@ -227,13 +227,13 @@ This document describes all the technologies, frameworks, and tools used to buil
 
 4. **Audit System**
 
-   - Document review by auditors
+   - Document review by external auditors
    - Review ratings (ACCEPTED/REJECTED)
    - Audit status tracking
 
 5. **Response System**
-   - Company owner responses to requirements
-   - Auditor replies to responses
+   - Internal auditor and company manager responses to requirements
+   - External auditor replies to responses
    - Threaded conversation system
 
 ---

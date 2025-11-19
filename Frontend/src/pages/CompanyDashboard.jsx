@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   LogOut,
@@ -20,8 +20,12 @@ import {
   Image as ImageIcon,
   FileSpreadsheet,
   FileType,
+  FileCheck,
+  UserPlus,
+  Trash2,
 } from "lucide-react"
 import { getMyDocuments, uploadFile, downloadFile, createCompanyProfile, getCompanyReviews, getCurrentUserCompany, getDocumentReviews, getAllSections, getAllRequirements, getRequirementDocuments, getRequirementStatuses, updateRequirementStatus, getRequirementStatusProgress, getAuditProgress, getRequirementsWithAuditStatus } from "../lib/company-api"
+import { getAvailableExternalAuditors, assignExternalAuditor, getExternalAuditorsForCompany, removeExternalAuditor } from "../lib/auditor-assignment-api"
 import RequirementsTabs from "../components/RequirementsTabs"
 import PDFPreviewModal from "../components/PDFPreviewModal"
 import isoPdf from "../assets/ISO-9001-2015-1.pdf"
@@ -68,13 +72,23 @@ export default function CompanyDashboard() {
   const [auditProgress, setAuditProgress] = useState(0)
   const [auditStatuses, setAuditStatuses] = useState([])
   const [showISOPdfModal, setShowISOPdfModal] = useState(false)
+  
+  // External auditor assignment states
+  const [availableAuditors, setAvailableAuditors] = useState([])
+  const [assignedAuditors, setAssignedAuditors] = useState([])
+  const [selectedAuditorId, setSelectedAuditorId] = useState("")
+  const [assigningAuditor, setAssigningAuditor] = useState(false)
+  const [showAuditorSection, setShowAuditorSection] = useState(false)
+  
+  // Ref for scrolling to requirements section
+  const requirementsSectionRef = useRef(null)
 
   useEffect(() => {
     const checkCompanyAndLoad = async () => {
       const token = localStorage.getItem("token")
       const userRole = localStorage.getItem("userRole")
 
-      if (!token || userRole !== "COMPANY_OWNER") {
+      if (!token || userRole !== "INTERNAL_AUDITOR") {
         navigate("/")
         return
       }
@@ -89,9 +103,12 @@ export default function CompanyDashboard() {
         setProfile(userCompany)
         localStorage.setItem("companyId", companyId)
         await fetchCompanyData(companyId)
-      } catch {
-        // User doesn't have a company or can't check - show create form
-        setShowCreateProfile(true)
+        await fetchAuditorData(companyId)
+      } catch (err) {
+        // Internal auditors should always have a company assigned during signup
+        // If they don't, there's an error
+        console.error("Failed to load company:", err)
+        setError("Failed to load company profile. You may not be assigned to a company.")
         setLoading(false)
       }
     }
@@ -111,6 +128,7 @@ export default function CompanyDashboard() {
       setProfile(newProfile)
       setShowCreateProfile(false)
       await fetchCompanyData(newProfile.id.toString())
+      await fetchAuditorData(newProfile.id.toString())
     } catch (err) {
       setError(err.message)
     } finally {
@@ -121,6 +139,56 @@ export default function CompanyDashboard() {
   const showToast = (message, type = "success") => {
     setToast({ message, type })
     setTimeout(() => setToast(null), 3000)
+  }
+
+  const fetchAuditorData = async (compId) => {
+    // Always show the section for internal auditors
+    setShowAuditorSection(true)
+    
+    try {
+      const [available, assigned] = await Promise.all([
+        getAvailableExternalAuditors(),
+        getExternalAuditorsForCompany(compId)
+      ])
+      setAvailableAuditors(available || [])
+      setAssignedAuditors(assigned || [])
+    } catch (err) {
+      console.error("Error fetching auditor data:", err)
+      // Show the section anyway, but with empty lists
+      setAvailableAuditors([])
+      setAssignedAuditors([])
+      showToast("Note: Could not load external auditors list", "error")
+    }
+  }
+
+  const handleAssignAuditor = async () => {
+    if (!selectedAuditorId || !companyId) return
+
+    setAssigningAuditor(true)
+    try {
+      await assignExternalAuditor(parseInt(companyId), parseInt(selectedAuditorId))
+      showToast("External auditor assigned successfully!")
+      setSelectedAuditorId("")
+      // Refresh auditor lists
+      await fetchAuditorData(companyId)
+    } catch (err) {
+      showToast(err.response?.data?.message || "Failed to assign auditor", "error")
+    } finally {
+      setAssigningAuditor(false)
+    }
+  }
+
+  const handleRemoveAuditor = async (assignmentId) => {
+    if (!window.confirm("Are you sure you want to remove this external auditor?")) return
+
+    try {
+      await removeExternalAuditor(assignmentId)
+      showToast("External auditor removed successfully!")
+      // Refresh auditor lists
+      await fetchAuditorData(companyId)
+    } catch (err) {
+      showToast(err.response?.data?.message || "Failed to remove auditor", "error")
+    }
   }
 
   const fetchCompanyData = async (companyId) => {
@@ -373,7 +441,7 @@ export default function CompanyDashboard() {
                     <div className="flex items-center gap-2 px-4 py-2 bg-purple-50 rounded-lg border border-purple-200">
                       <div className="w-2 h-2 bg-purple-600 rounded-full animate-pulse"></div>
                       <span className="text-sm font-medium text-purple-700">
-                        Auditor Progress: {Math.round(auditProgress)}%
+                        External Auditor Progress: {Math.round(auditProgress)}%
                       </span>
                     </div>
                   </>
@@ -518,12 +586,92 @@ export default function CompanyDashboard() {
                 </div>
               </div>
             </div>
+
+            {/* External Auditor Assignment - Inside Company Profile */}
+            {showAuditorSection && (
+              <div className="mt-8 pt-8 border-t border-gray-200">
+                <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <UserPlus className="w-5 h-5 text-purple-600" />
+                  External Auditor Assignment
+                </h3>
+                <p className="text-gray-600 mb-6">Assign external auditors to review your company's documents</p>
+
+                {/* Assign New Auditor */}
+                <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 mb-6">
+                  <h4 className="font-semibold text-gray-900 mb-3 text-sm">Assign New External Auditor</h4>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <select
+                      value={selectedAuditorId}
+                      onChange={(e) => setSelectedAuditorId(e.target.value)}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                    >
+                      <option value="">Select an external auditor...</option>
+                      {availableAuditors
+                        .filter(auditor => !assignedAuditors.some(assigned => assigned.externalAuditorId === auditor.id))
+                        .map((auditor) => (
+                          <option key={auditor.id} value={auditor.id}>
+                            {auditor.name} ({auditor.username})
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      onClick={handleAssignAuditor}
+                      disabled={!selectedAuditorId || assigningAuditor}
+                      className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
+                    >
+                      {assigningAuditor ? "Assigning..." : "Assign"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Assigned Auditors List */}
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-3 text-sm">Currently Assigned External Auditors</h4>
+                  {assignedAuditors.length === 0 ? (
+                    <div className="text-center py-6 bg-gray-50 rounded-xl">
+                      <FileCheck className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                      <p className="text-gray-500 text-sm">No external auditors assigned yet</p>
+                      <p className="text-xs text-gray-400 mt-1">Assign an auditor above to begin the external audit</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {assignedAuditors.map((assignment) => (
+                        <div
+                          key={assignment.id}
+                          className="flex items-center justify-between p-3 bg-purple-50 border border-purple-200 rounded-lg hover:border-purple-300 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="bg-purple-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm">
+                              {assignment.externalAuditorName?.[0] || "A"}
+                            </div>
+                            <div>
+                              <p className="font-semibold text-gray-900 text-sm">{assignment.externalAuditorName}</p>
+                              <p className="text-xs text-gray-600">@{assignment.externalAuditorUsername}</p>
+                              <p className="text-xs text-gray-500">
+                                Assigned {new Date(assignment.assignedAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleRemoveAuditor(assignment.id)}
+                            className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition-colors text-xs font-medium flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* Requirements & Documents Section */}
         {selectedISO === "ISO 9001" ? (
-          <div className="animate-slide-in">
+          <div ref={requirementsSectionRef} className="animate-slide-in">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">Requirements & Documents</h2>
@@ -562,6 +710,18 @@ export default function CompanyDashboard() {
               }}
               auditStatuses={auditStatuses || []}
               onUpdateAuditStatus={null}
+              onSectionClick={() => {
+                // Scroll to the top of requirements section when a section is clicked
+                // Small delay to ensure content has rendered
+                setTimeout(() => {
+                  if (requirementsSectionRef.current) {
+                    requirementsSectionRef.current.scrollIntoView({ 
+                      behavior: 'smooth', 
+                      block: 'start' 
+                    })
+                  }
+                }, 100)
+              }}
             />
           </div>
         ) : (
@@ -697,7 +857,7 @@ export default function CompanyDashboard() {
                 <div className="text-center py-12">
                   <Star className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                   <p className="text-gray-500 text-lg">No reviews yet</p>
-                  <p className="text-gray-400 text-sm">This document hasn't been reviewed by any auditors yet.</p>
+                  <p className="text-gray-400 text-sm">This document hasn't been reviewed by any external auditors yet.</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -710,7 +870,7 @@ export default function CompanyDashboard() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             <span className="font-semibold text-gray-900">
-                              {review.auditor?.name || review.auditor?.username || "Anonymous Auditor"}
+                              {review.auditor?.name || review.auditor?.username || "Anonymous External Auditor"}
                             </span>
                             <span className="text-xs text-gray-500">
                               • {new Date(review.reviewedAt).toLocaleDateString()}

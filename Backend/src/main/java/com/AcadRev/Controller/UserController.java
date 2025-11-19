@@ -19,7 +19,7 @@ public class UserController {
 
 
     @GetMapping("")
-    @PreAuthorize("hasAnyRole('ADMIN','AUDITOR')")
+    @PreAuthorize("hasAnyRole('ADMIN','EXTERNAL_AUDITOR')")
     public ResponseEntity<List<String>> getAllCompanies(){
         return ResponseEntity.ok(userService.getCompanies());
     }

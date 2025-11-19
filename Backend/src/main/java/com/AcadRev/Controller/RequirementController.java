@@ -22,7 +22,7 @@ public class RequirementController {
     }
 
     @GetMapping("/{requirementId}/documents")
-    @PreAuthorize("hasAnyRole('COMPANY_OWNER', 'AUDITOR')")
+    @PreAuthorize("hasAnyRole('INTERNAL_AUDITOR', 'EXTERNAL_AUDITOR', 'COMPANY_MANAGER')")
     public List<Document> getDocumentsByRequirement(@PathVariable int requirementId) {
         return requirementService.getDocumentsByRequirementId(requirementId);
     }
