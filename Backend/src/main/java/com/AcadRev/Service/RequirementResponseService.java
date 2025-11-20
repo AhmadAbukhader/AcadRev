@@ -5,9 +5,11 @@ import com.AcadRev.Model.Requirement;
 import com.AcadRev.Model.CompanyProfile;
 import com.AcadRev.Model.RequirementResponse;
 import com.AcadRev.Model.User;
+import com.AcadRev.Model.UserType;
 import com.AcadRev.Repository.RequirementRepository;
 import com.AcadRev.Repository.CompanyProfileRepository;
 import com.AcadRev.Repository.RequirementResponseRepository;
+import com.AcadRev.Repository.UserRepository;
 import com.AcadRev.Exception.ResourceNotFoundException;
 import com.AcadRev.Exception.UnauthorizedAccessException;
 
@@ -27,14 +29,18 @@ public class RequirementResponseService {
     private final RequirementResponseRepository requirementResponseRepository;
     private final RequirementRepository requirementRepository;
     private final CompanyProfileRepository companyProfileRepository;
+    private final UserRepository userRepository;
 
-    // Helper method to get current authenticated user
+    // Helper method to get current authenticated user (reloaded from repository to ensure relationships are loaded)
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || auth.getPrincipal() == null) {
             throw new UnauthorizedAccessException("User not authenticated");
         }
-        return (User) auth.getPrincipal();
+        User principal = (User) auth.getPrincipal();
+        // Reload from repository to ensure companyProfile is properly loaded
+        return userRepository.findById(principal.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
 
     // Helper method to convert entity to DTO
@@ -81,8 +87,27 @@ public class RequirementResponseService {
         CompanyProfile company = companyProfileRepository.findById(companyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Company not found"));
 
-        // Check if user owns the company
-        if (!company.getUser().getId().equals(currentUser.getId())) {
+        System.out.println("DEBUG: Response create attempt - User ID: " + currentUser.getId() + ", Role: " + currentUser.getRole().getRole() + 
+                          ", CompanyProfile: " + (currentUser.getCompanyProfile() != null ? currentUser.getCompanyProfile().getId() : "null") +
+                          ", Target CompanyId: " + companyId);
+
+        // Check authorization: either the user is the company owner (COMPANY_MANAGER) 
+        // or an INTERNAL_AUDITOR assigned to this company
+        boolean isAuthorized = false;
+        if (currentUser.getRole().getRole() == UserType.COMPANY_MANAGER) {
+            // Company manager must be the owner
+            isAuthorized = company.getUser().getId().equals(currentUser.getId());
+            System.out.println("DEBUG: Company Manager check - Owner ID: " + company.getUser().getId() + ", User ID: " + currentUser.getId() + ", Authorized: " + isAuthorized);
+        } else if (currentUser.getRole().getRole() == UserType.INTERNAL_AUDITOR) {
+            // Internal auditor must be assigned to this company
+            isAuthorized = currentUser.getCompanyProfile() != null 
+                && currentUser.getCompanyProfile().getId().equals(companyId);
+            System.out.println("DEBUG: Internal Auditor check - User CompanyProfile: " + 
+                             (currentUser.getCompanyProfile() != null ? currentUser.getCompanyProfile().getId() : "null") + 
+                             ", Target CompanyId: " + companyId + ", Authorized: " + isAuthorized);
+        }
+
+        if (!isAuthorized) {
             throw new UnauthorizedAccessException("You can only create responses for your own company");
         }
 

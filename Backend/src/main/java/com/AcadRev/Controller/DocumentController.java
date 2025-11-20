@@ -22,7 +22,7 @@ public class DocumentController {
     private final DocumentService documentService;
 
     @PostMapping("/upload")
-    @PreAuthorize("hasAnyRole('INTERNAL_AUDITOR')")
+    @PreAuthorize("hasAnyRole('INTERNAL_AUDITOR', 'COMPANY_MANAGER')")
     public ResponseEntity<String> uploadFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam("companyId") int companyId,

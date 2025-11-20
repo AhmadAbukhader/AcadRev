@@ -7,12 +7,14 @@ import com.AcadRev.Exception.UnauthorizedAccessException;
 import com.AcadRev.Model.CompanyProfile;
 import com.AcadRev.Model.Document;
 import com.AcadRev.Model.User;
+import com.AcadRev.Model.UserType;
 import com.AcadRev.Model.Section;
 import com.AcadRev.Model.Requirement;
 import com.AcadRev.Repository.CompanyProfileRepository;
 import com.AcadRev.Repository.DocumentRepository;
 import com.AcadRev.Repository.SectionRepository;
 import com.AcadRev.Repository.RequirementRepository;
+import com.AcadRev.Repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -29,6 +31,7 @@ public class DocumentService {
     private final CompanyProfileRepository companyProfileRepository;
     private final SectionRepository sectionRepository;
     private final RequirementRepository requirementRepository;
+    private final UserRepository userRepository;
 
     public Document uploadDocument(MultipartFile file, int companyId, String documentType, Integer sectionId,
             Integer requirementId) throws IOException {
@@ -38,7 +41,32 @@ public class DocumentService {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         User currentUser = (User) auth.getPrincipal();
 
-        if (!company.getUser().getId().equals(currentUser.getId())) {
+        // Reload user from repository to ensure companyProfile is properly loaded
+        User user = userRepository.findById(currentUser.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        System.out.println("DEBUG: Upload attempt - User ID: " + user.getId() + ", Role: " + user.getRole().getRole() +
+                ", CompanyProfile: " + (user.getCompanyProfile() != null ? user.getCompanyProfile().getId() : "null") +
+                ", Target CompanyId: " + companyId);
+
+        // Check authorization: either the user is the company owner (COMPANY_MANAGER)
+        // or an INTERNAL_AUDITOR assigned to this company
+        boolean isAuthorized = false;
+        if (user.getRole().getRole() == UserType.COMPANY_MANAGER) {
+            // Company manager must be the owner
+            isAuthorized = company.getUser().getId().equals(user.getId());
+            System.out.println("DEBUG: Company Manager check - Owner ID: " + company.getUser().getId() + ", User ID: "
+                    + user.getId() + ", Authorized: " + isAuthorized);
+        } else if (user.getRole().getRole() == UserType.INTERNAL_AUDITOR) {
+            // Internal auditor must be assigned to this company
+            isAuthorized = user.getCompanyProfile() != null
+                    && user.getCompanyProfile().getId().equals(companyId);
+            System.out.println("DEBUG: Internal Auditor check - User CompanyProfile: " +
+                    (user.getCompanyProfile() != null ? user.getCompanyProfile().getId() : "null") +
+                    ", Target CompanyId: " + companyId + ", Authorized: " + isAuthorized);
+        }
+
+        if (!isAuthorized) {
             throw new UnauthorizedAccessException("You are not authorized to upload documents for this company");
         }
 

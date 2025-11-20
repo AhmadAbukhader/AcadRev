@@ -4,6 +4,7 @@ import com.AcadRev.Dto.RequirementResponseDTO;
 import com.AcadRev.Service.RequirementResponseService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,6 +17,7 @@ public class RequirementResponseController {
     private final RequirementResponseService requirementResponseService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('INTERNAL_AUDITOR', 'COMPANY_MANAGER')")
     public ResponseEntity<RequirementResponseDTO> createResponse(
             @RequestParam int requirementId,
             @RequestParam int companyId,
