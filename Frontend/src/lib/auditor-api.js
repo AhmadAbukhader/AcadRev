@@ -185,3 +185,9 @@ export const getAuditProgress = async (companyId) => {
     const response = await api.get(`/api/v1/requirement-auditing/progress/${companyId}`)
     return response.data || 0
 }
+
+// Get requirement statuses for a company (for external auditors to view internal auditor statuses)
+export const getCompanyRequirementStatuses = async (companyId) => {
+    const response = await api.get(`/api/v1/requirements-status/company/${companyId}`)
+    return response.data || []
+}

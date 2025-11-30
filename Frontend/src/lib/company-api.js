@@ -153,15 +153,17 @@ export const getRequirementDocuments = async (requirementId, companyId = null) =
     const response = await api.get(`/api/v1/requirements/${requirementId}/documents`)
     let documents = response.data || []
 
-    // Filter by companyId if provided
-    if (companyId) {
-        const companyIdNum = typeof companyId === 'string' ? parseInt(companyId, 10) : companyId
-        documents = documents.filter(doc => {
-            // Check if document has company and company.id matches
-            return doc.company && doc.company.id === companyIdNum
-        })
-    }
+    console.log(`[getRequirementDocuments] Requirement ${requirementId}: Received ${documents.length} documents from backend`, {
+        documents: documents.map(d => ({
+            id: d.id,
+            fileName: d.fileName,
+            companyId: d.company?.id,
+            companyName: d.company?.name
+        }))
+    })
 
+    // Backend now filters by user's company, so no need for frontend filtering
+    // Just return what the backend gives us
     return documents
 }
 

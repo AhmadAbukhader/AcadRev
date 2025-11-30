@@ -32,7 +32,8 @@ export default function RequirementsTabs({
   onUpdateStatus = null, // Function to update requirement status (for internal auditors and company managers)
   auditStatuses = [], // Array of audit status objects (for external auditors)
   onUpdateAuditStatus = null, // Function to update audit status (for external auditors)
-  onSectionClick = null // Callback when a section is clicked (for scrolling)
+  onSectionClick = null, // Callback when a section is clicked (for scrolling)
+  isReadOnly = false // Read-only mode for managers (view only, no interactions)
 }) {
   const [activeSection, setActiveSection] = useState(null)
   const [expandedSections, setExpandedSections] = useState(new Set())
@@ -147,14 +148,13 @@ ISO 9000:2015, Quality management systems — Fundamentals and vocabulary`
           setDocumentsCache(prev => ({ ...prev, [refreshRequirementId]: docs || [] }))
           setDocumentCounts(prev => ({ ...prev, [refreshRequirementId]: docs?.length || 0 }))
 
-          // Load reviews for each document
+          // Cache reviews if already in document object, otherwise load on-demand
           if (docs && docs.length > 0) {
             for (const doc of docs) {
-              if (!doc.reviews) {
-                loadDocumentReviews(doc.id)
-              } else {
+              if (doc.reviews) {
                 setDocumentReviews(prev => ({ ...prev, [doc.id]: doc.reviews || [] }))
               }
+              // Reviews will be loaded on-demand when document is viewed
             }
           }
         } catch (error) {
@@ -179,7 +179,25 @@ ISO 9000:2015, Quality management systems — Fundamentals and vocabulary`
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshRequirementId, getRequirementDocuments, companyId])
 
-  // Load document counts for all requirements (only once)
+  // Initialize loading states for all requirements
+  useEffect(() => {
+    if (requirements && requirements.length > 0) {
+      setLoadingDocs(prev => {
+        const initialized = { ...prev }
+        requirements.forEach(req => {
+          if (initialized[req.id] === undefined) {
+            initialized[req.id] = false
+          }
+        })
+        return initialized
+      })
+    }
+  }, [requirements])
+
+  // Load document counts for all requirements - DISABLED for performance
+  // Counts are now loaded lazily when requirements are expanded
+  // This prevents 100+ API calls on page load
+  /*
   useEffect(() => {
     if (requirements && requirements.length > 0 && getRequirementDocuments) {
       const loadCounts = async () => {
@@ -211,6 +229,7 @@ ISO 9000:2015, Quality management systems — Fundamentals and vocabulary`
       loadCounts()
     }
   }, [requirements, getRequirementDocuments, companyId])
+  */
 
   // Organize sections into hierarchy based on code
   useEffect(() => {
@@ -384,9 +403,21 @@ ISO 9000:2015, Quality management systems — Fundamentals and vocabulary`
     setExpandedRequirements(prev => {
       const next = new Set(prev)
       if (next.has(requirementId)) {
+        // Collapsing - no need to load
         next.delete(requirementId)
       } else {
+        // Expanding - load documents and responses
         next.add(requirementId)
+        console.log(`Expanding requirement ${requirementId}, loading documents and responses...`)
+        
+        // Ensure loading state is initialized before calling load
+        setLoadingDocs(current => {
+          if (current[requirementId] === undefined) {
+            return { ...current, [requirementId]: false }
+          }
+          return current
+        })
+        
         loadDocuments(requirementId)
         loadRequirementResponse(requirementId)
       }
@@ -488,7 +519,14 @@ ISO 9000:2015, Quality management systems — Fundamentals and vocabulary`
 
   // Get status for a requirement (defaults to 0 if not found) - for internal auditors and company managers
   const getRequirementStatus = (requirementId) => {
-    const statusObj = requirementStatuses.find(s => s.requirement?.id === requirementId)
+    if (!requirementStatuses || requirementStatuses.length === 0) {
+      return 0
+    }
+    const statusObj = requirementStatuses.find(s => {
+      // Handle both cases: s.requirement?.id or direct requirementId property
+      const reqId = s.requirement?.id || s.requirementId
+      return reqId === requirementId
+    })
     return statusObj ? statusObj.status : 0
   }
 
@@ -512,9 +550,9 @@ ISO 9000:2015, Quality management systems — Fundamentals and vocabulary`
     }
   }
 
-  // Toggle status dropdown (for internal auditors and company managers)
+  // Toggle status dropdown (for internal auditors only, not managers)
   const toggleStatusDropdown = (requirementId) => {
-    if (isAuditor || !onUpdateStatus) return
+    if (isAuditor || !onUpdateStatus || isReadOnly) return
     setStatusDropdowns(prev => ({
       ...prev,
       [requirementId]: !prev[requirementId]
@@ -530,9 +568,9 @@ ISO 9000:2015, Quality management systems — Fundamentals and vocabulary`
     }))
   }
 
-  // Handle status update (for internal auditors and company managers)
+  // Handle status update (for internal auditors only)
   const handleStatusUpdate = async (requirementId, newStatus) => {
-    if (!onUpdateStatus) return
+    if (!onUpdateStatus || isReadOnly) return
     try {
       await onUpdateStatus(requirementId, newStatus)
       setStatusDropdowns(prev => ({
@@ -559,24 +597,39 @@ ISO 9000:2015, Quality management systems — Fundamentals and vocabulary`
   }
 
   const loadDocuments = async (requirementId, forceReload = false) => {
-    if (!forceReload && (documentsCache[requirementId] || loadingDocs[requirementId])) return
+    // If already cached and not forcing reload, just ensure loading state is false
+    if (!forceReload && documentsCache[requirementId] !== undefined) {
+      setLoadingDocs(prev => ({ ...prev, [requirementId]: false }))
+      return
+    }
 
+    // Skip if already loading (unless force reload)
+    if (!forceReload && loadingDocs[requirementId] === true) {
+      console.log(`Already loading documents for requirement ${requirementId}, skipping...`)
+      return
+    }
+
+    console.log(`Loading documents for requirement ${requirementId}...`)
     setLoadingDocs(prev => ({ ...prev, [requirementId]: true }))
+    
     try {
       const docs = await getRequirementDocuments(requirementId, companyId)
+      console.log(`Loaded ${docs?.length || 0} documents for requirement ${requirementId}`)
+      
+      // Update both cache and count
       setDocumentsCache(prev => ({ ...prev, [requirementId]: docs || [] }))
       setDocumentCounts(prev => ({ ...prev, [requirementId]: docs?.length || 0 }))
 
-      // Load reviews for each document if not already included
+      // Don't load reviews immediately - load them lazily when document is viewed
+      // This prevents making 10+ API calls per requirement
+      // Reviews will be loaded on-demand when user clicks to view document details
       if (docs && docs.length > 0) {
         for (const doc of docs) {
-          // Always load reviews if not in document object (they come from separate endpoint)
-          if (!doc.reviews) {
-            loadDocumentReviews(doc.id)
-          } else {
-            // If reviews are in document, also store them in documentReviews cache
+          // If reviews are already in document object, cache them
+          if (doc.reviews) {
             setDocumentReviews(prev => ({ ...prev, [doc.id]: doc.reviews || [] }))
           }
+          // Otherwise, reviews will be loaded on-demand when needed
         }
       }
     } catch (error) {
@@ -584,6 +637,7 @@ ISO 9000:2015, Quality management systems — Fundamentals and vocabulary`
       setDocumentsCache(prev => ({ ...prev, [requirementId]: [] }))
       setDocumentCounts(prev => ({ ...prev, [requirementId]: 0 }))
     } finally {
+      console.log(`Finished loading documents for requirement ${requirementId}, clearing loading state`)
       setLoadingDocs(prev => ({ ...prev, [requirementId]: false }))
     }
   }
@@ -627,6 +681,35 @@ ISO 9000:2015, Quality management systems — Fundamentals and vocabulary`
     if (!isAuditor || !currentAuditorId) return false
     const reviews = doc.reviews || documentReviews[doc.id] || []
     return reviews.some(review => review.auditor?.id === currentAuditorId)
+  }
+
+  // Check if requirement has been reviewed by external auditor
+  const getRequirementReviewStatus = (requirementId) => {
+    const docs = documentsCache[requirementId] || []
+    
+    // If no documents uploaded, show red (not reviewed)
+    if (docs.length === 0) {
+      // Only show indicator if we've actually loaded the documents (not just undefined)
+      return documentsCache[requirementId] !== undefined ? 'not-reviewed' : null
+    }
+    
+    // Check if all documents have at least one review
+    let reviewedCount = 0
+    for (const doc of docs) {
+      const reviews = doc.reviews || documentReviews[doc.id] || []
+      if (reviews.length > 0) {
+        reviewedCount++
+      }
+    }
+    
+    // All documents reviewed = green, some reviewed = orange, none reviewed = red
+    if (reviewedCount === docs.length) {
+      return 'reviewed' // Green - all reviewed
+    } else if (reviewedCount > 0) {
+      return 'partial' // Orange - partially reviewed
+    } else {
+      return 'not-reviewed' // Red - not reviewed or no documents
+    }
   }
 
   const isPDF = (fileName) => {
@@ -1111,10 +1194,23 @@ ISO 9000:2015, Quality management systems — Fundamentals and vocabulary`
                       const docs = documentsCache[requirement.id] || []
                       const isLoading = loadingDocs[requirement.id]
 
+                      const reviewStatus = getRequirementReviewStatus(requirement.id)
+                      
                       return (
                         <div
                           key={`req-${requirement.id}-${activeSection}`}
-                          className="border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200"
+                          className={`border rounded-xl shadow-sm hover:shadow-md transition-all duration-200 ${
+                            reviewStatus === 'reviewed' ? 'border-l-4 border-l-green-500 border-r-gray-200 border-t-gray-200 border-b-gray-200' :
+                            reviewStatus === 'partial' ? 'border-l-4 border-l-orange-500 border-r-gray-200 border-t-gray-200 border-b-gray-200' :
+                            reviewStatus === 'not-reviewed' ? 'border-l-4 border-l-red-500 border-r-gray-200 border-t-gray-200 border-b-gray-200' :
+                            'border-gray-200'
+                          }`}
+                          title={
+                            reviewStatus === 'reviewed' ? 'All documents reviewed by external auditor' :
+                            reviewStatus === 'partial' ? 'Some documents reviewed by external auditor' :
+                            reviewStatus === 'not-reviewed' ? (documentCounts[requirement.id] === 0 ? 'No documents uploaded yet' : 'Not reviewed by external auditor') :
+                            undefined
+                          }
                         >
                           {/* Requirement Header */}
                           <div className="bg-gradient-to-r from-gray-50 to-indigo-50/30 p-4 flex items-center justify-between border-b border-gray-200 relative">
@@ -1134,64 +1230,74 @@ ISO 9000:2015, Quality management systems — Fundamentals and vocabulary`
                                 <p className="text-xs text-gray-500 mt-1">
                                   {documentCounts[requirement.id] !== undefined
                                     ? `${documentCounts[requirement.id]} document${documentCounts[requirement.id] !== 1 ? "s" : ""}`
-                                    : "Loading..."}
+                                    : "Click to view documents"}
                                 </p>
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
-                              {/* Status Dropdown - Only for internal auditors and company managers */}
-                              {!isAuditor && onUpdateStatus && (
-                                <div className="relative status-dropdown-container" style={{ zIndex: statusDropdowns[requirement.id] ? 1000 : 'auto' }}>
-                                  <button
-                                    onClick={() => toggleStatusDropdown(requirement.id)}
-                                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border-2 transition-all duration-200 flex items-center gap-2 ${getStatusLabel(getRequirementStatus(requirement.id)).color
-                                      } hover:shadow-md relative`}
-                                    style={{ zIndex: statusDropdowns[requirement.id] ? 1001 : 'auto' }}
-                                  >
-                                    <span>{getStatusLabel(getRequirementStatus(requirement.id)).label}</span>
-                                    {statusDropdowns[requirement.id] ? (
-                                      <ChevronUp className="w-4 h-4" />
-                                    ) : (
-                                      <ChevronDown className="w-4 h-4" />
-                                    )}
-                                  </button>
-                                  {statusDropdowns[requirement.id] && (
-                                    <div className="absolute right-0 top-full mt-2 w-32 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden status-dropdown-container" style={{ zIndex: 1002 }}>
+                              {/* Internal Auditor Status - editable for internal auditors, read-only for managers and external auditors */}
+                              {(!isAuditor || (isAuditor && Array.isArray(requirementStatuses))) && (
+                                <>
+                                  {onUpdateStatus && !isReadOnly && !isAuditor ? (
+                                    <div className="relative status-dropdown-container" style={{ zIndex: statusDropdowns[requirement.id] ? 1000 : 'auto' }}>
                                       <button
-                                        onClick={() => handleStatusUpdate(requirement.id, 0)}
-                                        className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center gap-2 ${getRequirementStatus(requirement.id) === 0 ? "bg-red-50 font-semibold" : ""
-                                          }`}
+                                        onClick={() => toggleStatusDropdown(requirement.id)}
+                                        className={`px-3 py-1.5 rounded-lg text-sm font-medium border-2 transition-all duration-200 flex items-center gap-2 ${getStatusLabel(getRequirementStatus(requirement.id)).color
+                                          } hover:shadow-md relative`}
+                                        style={{ zIndex: statusDropdowns[requirement.id] ? 1001 : 'auto' }}
+                                        title="Internal Auditor Self-Evaluation"
                                       >
-                                        <XCircle className={`w-4 h-4 ${getRequirementStatus(requirement.id) === 0 ? "text-red-600" : "text-gray-400"}`} />
-                                        No
+                                        <span>Internal: {getStatusLabel(getRequirementStatus(requirement.id)).label}</span>
+                                        {statusDropdowns[requirement.id] ? (
+                                          <ChevronUp className="w-4 h-4" />
+                                        ) : (
+                                          <ChevronDown className="w-4 h-4" />
+                                        )}
                                       </button>
-                                      <button
-                                        onClick={() => handleStatusUpdate(requirement.id, 1)}
-                                        className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center gap-2 ${getRequirementStatus(requirement.id) === 1 ? "bg-orange-50 font-semibold" : ""
-                                          }`}
-                                      >
-                                        <AlertCircle className={`w-4 h-4 ${getRequirementStatus(requirement.id) === 1 ? "text-orange-600" : "text-gray-400"}`} />
-                                        TSE
-                                      </button>
-                                      <button
-                                        onClick={() => handleStatusUpdate(requirement.id, 2)}
-                                        className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center gap-2 ${getRequirementStatus(requirement.id) === 2 ? "bg-green-50 font-semibold" : ""
-                                          }`}
-                                      >
-                                        <CheckCircle2 className={`w-4 h-4 ${getRequirementStatus(requirement.id) === 2 ? "text-green-600" : "text-gray-400"}`} />
-                                        Yes
-                                      </button>
+                                      {statusDropdowns[requirement.id] && (
+                                        <div className="absolute right-0 top-full mt-2 w-32 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden status-dropdown-container" style={{ zIndex: 1002 }}>
+                                          <button
+                                            onClick={() => handleStatusUpdate(requirement.id, 0)}
+                                            className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center gap-2 ${getRequirementStatus(requirement.id) === 0 ? "bg-red-50 font-semibold" : ""
+                                              }`}
+                                          >
+                                            <XCircle className={`w-4 h-4 ${getRequirementStatus(requirement.id) === 0 ? "text-red-600" : "text-gray-400"}`} />
+                                            No
+                                          </button>
+                                          <button
+                                            onClick={() => handleStatusUpdate(requirement.id, 1)}
+                                            className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center gap-2 ${getRequirementStatus(requirement.id) === 1 ? "bg-orange-50 font-semibold" : ""
+                                              }`}
+                                          >
+                                            <AlertCircle className={`w-4 h-4 ${getRequirementStatus(requirement.id) === 1 ? "text-orange-600" : "text-gray-400"}`} />
+                                            TSE
+                                          </button>
+                                          <button
+                                            onClick={() => handleStatusUpdate(requirement.id, 2)}
+                                            className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors flex items-center gap-2 ${getRequirementStatus(requirement.id) === 2 ? "bg-green-50 font-semibold" : ""
+                                              }`}
+                                          >
+                                            <CheckCircle2 className={`w-4 h-4 ${getRequirementStatus(requirement.id) === 2 ? "text-green-600" : "text-gray-400"}`} />
+                                            Yes
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    // Read-only display for managers and external auditors
+                                    <div className={`px-3 py-1.5 rounded-lg text-sm font-medium border-2 flex items-center gap-2 ${getStatusLabel(getRequirementStatus(requirement.id)).color}`} title="Internal Auditor Self-Evaluation (Read-only)">
+                                      <span>Internal: {getStatusLabel(getRequirementStatus(requirement.id)).label}</span>
                                     </div>
                                   )}
-                                </div>
+                                </>
                               )}
-                              {/* Audit Status - Read-only for internal users, editable for external auditors */}
+                              {/* External Auditor Status - Read-only for internal users, editable for external auditors */}
                               {(!isAuditor && auditStatuses.length > 0) || (isAuditor && onUpdateAuditStatus) ? (
                                 <>
                                   {!isAuditor ? (
                                     // Read-only display for internal auditors and company managers
-                                    <div className={`px-3 py-1.5 rounded-lg text-sm font-medium border-2 flex items-center gap-2 ${getStatusLabel(getAuditStatus(requirement.id)).color}`} title="External Auditor Status (Read-only)">
-                                      <span>Audit: {getStatusLabel(getAuditStatus(requirement.id)).label}</span>
+                                    <div className={`px-3 py-1.5 rounded-lg text-sm font-medium border-2 flex items-center gap-2 ${getStatusLabel(getAuditStatus(requirement.id)).color}`} title="External Auditor Compliance Review (Read-only)">
+                                      <span>External: {getStatusLabel(getAuditStatus(requirement.id)).label}</span>
                                     </div>
                                   ) : (
                                     // Editable dropdown for external auditors (No/TSE/Yes)
@@ -1201,9 +1307,9 @@ ISO 9000:2015, Quality management systems — Fundamentals and vocabulary`
                                         className={`px-3 py-1.5 rounded-lg text-sm font-medium border-2 transition-all duration-200 flex items-center gap-2 ${getStatusLabel(getAuditStatus(requirement.id)).color
                                           } hover:shadow-md relative`}
                                         style={{ zIndex: statusDropdowns[`audit-${requirement.id}`] ? 1001 : 'auto' }}
-                                        title="External Auditor Status"
+                                        title="External Auditor Compliance Review"
                                       >
-                                        <span>{getStatusLabel(getAuditStatus(requirement.id)).label}</span>
+                                        <span>External: {getStatusLabel(getAuditStatus(requirement.id)).label}</span>
                                         {statusDropdowns[`audit-${requirement.id}`] ? (
                                           <ChevronUp className="w-4 h-4" />
                                         ) : (
@@ -1242,7 +1348,7 @@ ISO 9000:2015, Quality management systems — Fundamentals and vocabulary`
                                   )}
                                 </>
                               ) : null}
-                              {!isAuditor && onUpload && (
+                              {!isAuditor && onUpload && !isReadOnly && (
                                 <button
                                   onClick={() => {
                                     const section = organizedSections.find(s => s.code === activeSection)
@@ -1272,7 +1378,7 @@ ISO 9000:2015, Quality management systems — Fundamentals and vocabulary`
                                   {(() => {
                                     const responses = requirementResponses[requirement.id] || []
                                     if (responses.length === 0) {
-                                      return !isAuditor ? (
+                                      return !isAuditor && !isReadOnly ? (
                                         <button
                                           onClick={() => openResponseDialog(requirement.id)}
                                           className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
@@ -1307,8 +1413,8 @@ ISO 9000:2015, Quality management systems — Fundamentals and vocabulary`
                                               </div>
                                             </div>
                                             
-                                            {/* Reply and Update buttons - show side by side */}
-                                            {((isAuditor && isInternalUser) || (!isAuditor)) && (
+                                            {/* Reply and Update buttons - show side by side (not for read-only managers) */}
+                                            {((isAuditor && isInternalUser) || (!isAuditor && !isReadOnly)) && (
                                               <div className="mt-2 flex items-center gap-2">
                                                 <button
                                                   onClick={() => openResponseDialog(requirement.id, null, response.id)}
@@ -1318,8 +1424,8 @@ ISO 9000:2015, Quality management systems — Fundamentals and vocabulary`
                                                   Reply
                                                 </button>
                                                 
-                                                {/* Update button - only for internal auditors and company managers on their own top-level responses */}
-                                                {!isAuditor && isCurrentUser && !response.parentResponseId && (
+                                                {/* Update button - only for internal auditors on their own top-level responses */}
+                                                {!isAuditor && !isReadOnly && isCurrentUser && !response.parentResponseId && (
                                                   <button
                                                     onClick={() => openResponseDialog(requirement.id, response)}
                                                     className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-2"
@@ -1345,7 +1451,7 @@ ISO 9000:2015, Quality management systems — Fundamentals and vocabulary`
                                     return (
                                       <div className="space-y-3">
                                         {responses.map(response => renderResponse(response))}
-                                        {!isAuditor && (
+                                        {!isAuditor && !isReadOnly && (
                                           <button
                                             onClick={() => openResponseDialog(requirement.id)}
                                             className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
@@ -1381,9 +1487,18 @@ ISO 9000:2015, Quality management systems — Fundamentals and vocabulary`
                                     const hasReview = reviews.length > 0
                                     const auditorHasReviewed = hasAuditorReviewed(doc)
                                     const latestReview = hasReview ? reviews[reviews.length - 1] : null
+                                    // Get the current auditor's review specifically
+                                    const currentAuditorReview = isAuditor && currentAuditorId && hasReview
+                                      ? reviews.find(review => review.auditor?.id === currentAuditorId)
+                                      : null
                                     const reviewStatus = latestReview ? getReviewStatusColor(latestReview.rating) : null
                                     const isReviewing = reviewingDoc === doc.id
                                     const isPDFFile = isPDF(doc.fileName) || doc.fileType === "application/pdf"
+
+                                    // Lazy load reviews on-demand when document is rendered
+                                    if (!doc.reviews && !documentReviews[doc.id] && !hasReview) {
+                                      loadDocumentReviews(doc.id)
+                                    }
 
                                     return (
                                       <div
@@ -1480,6 +1595,16 @@ ISO 9000:2015, Quality management systems — Fundamentals and vocabulary`
                                             )}
                                           </div>
                                         </div>
+
+                                        {/* Show review comment for external auditor after they've reviewed */}
+                                        {isAuditor && auditorHasReviewed && currentAuditorReview && currentAuditorReview.comments && (
+                                          <div className="mt-3 pt-3 border-t border-gray-200">
+                                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                              <p className="text-xs font-medium text-blue-900 mb-1">Compliance:</p>
+                                              <p className="text-sm text-blue-800">{currentAuditorReview.comments}</p>
+                                            </div>
+                                          </div>
+                                        )}
 
                                         {/* Inline Review Form - Show for auditors if document hasn't been reviewed */}
                                         {isAuditor && onReview && !auditorHasReviewed && (() => {

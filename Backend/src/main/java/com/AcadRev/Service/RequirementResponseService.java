@@ -31,7 +31,8 @@ public class RequirementResponseService {
     private final CompanyProfileRepository companyProfileRepository;
     private final UserRepository userRepository;
 
-    // Helper method to get current authenticated user (reloaded from repository to ensure relationships are loaded)
+    // Helper method to get current authenticated user (reloaded from repository to
+    // ensure relationships are loaded)
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || auth.getPrincipal() == null) {
@@ -53,8 +54,9 @@ public class RequirementResponseService {
         dto.setParentResponseId(response.getParentResponse() != null ? response.getParentResponse().getId() : null);
         dto.setCreatedByUserId(response.getCreatedBy() != null ? response.getCreatedBy().getId() : null);
         dto.setCreatedByUserName(response.getCreatedBy() != null ? response.getCreatedBy().getName() : null);
-        dto.setCreatedByUserRole(response.getCreatedBy() != null && response.getCreatedBy().getRole() != null 
-            ? response.getCreatedBy().getRole().getRole().toString() : null);
+        dto.setCreatedByUserRole(response.getCreatedBy() != null && response.getCreatedBy().getRole() != null
+                ? response.getCreatedBy().getRole().getRole().toString()
+                : null);
         dto.setCreatedAt(response.getCreatedAt());
         dto.setUpdatedAt(response.getUpdatedAt());
         return dto;
@@ -63,52 +65,41 @@ public class RequirementResponseService {
     // Helper method to build response tree with replies
     private RequirementResponseDTO buildResponseTree(RequirementResponse response) {
         RequirementResponseDTO dto = toDTO(response);
-        
+
         // Get all replies to this response
-        List<RequirementResponse> replies = requirementResponseRepository.findByParentResponseIdOrderByCreatedAtAsc(response.getId());
+        List<RequirementResponse> replies = requirementResponseRepository
+                .findByParentResponseIdOrderByCreatedAtAsc(response.getId());
         if (!replies.isEmpty()) {
             dto.setReplies(replies.stream()
-                .map(this::buildResponseTree)
-                .collect(Collectors.toList()));
+                    .map(this::buildResponseTree)
+                    .collect(Collectors.toList()));
         } else {
             dto.setReplies(new ArrayList<>());
         }
-        
+
         return dto;
     }
 
-    // 1️⃣ Create response (internal auditor or company manager)
+    // 1️⃣ Create response (internal auditor only)
     public RequirementResponseDTO createResponse(int requirementId, int companyId, String responseText) {
         User currentUser = getCurrentUser();
-        
+
+        if (currentUser.getRole().getRole() != UserType.INTERNAL_AUDITOR) {
+            throw new UnauthorizedAccessException("Only internal auditors can create requirement responses");
+        }
+
         Requirement requirement = requirementRepository.findById(requirementId)
                 .orElseThrow(() -> new ResourceNotFoundException("Requirement not found"));
 
         CompanyProfile company = companyProfileRepository.findById(companyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Company not found"));
 
-        System.out.println("DEBUG: Response create attempt - User ID: " + currentUser.getId() + ", Role: " + currentUser.getRole().getRole() + 
-                          ", CompanyProfile: " + (currentUser.getCompanyProfile() != null ? currentUser.getCompanyProfile().getId() : "null") +
-                          ", Target CompanyId: " + companyId);
-
-        // Check authorization: either the user is the company owner (COMPANY_MANAGER) 
-        // or an INTERNAL_AUDITOR assigned to this company
-        boolean isAuthorized = false;
-        if (currentUser.getRole().getRole() == UserType.COMPANY_MANAGER) {
-            // Company manager must be the owner
-            isAuthorized = company.getUser().getId().equals(currentUser.getId());
-            System.out.println("DEBUG: Company Manager check - Owner ID: " + company.getUser().getId() + ", User ID: " + currentUser.getId() + ", Authorized: " + isAuthorized);
-        } else if (currentUser.getRole().getRole() == UserType.INTERNAL_AUDITOR) {
-            // Internal auditor must be assigned to this company
-            isAuthorized = currentUser.getCompanyProfile() != null 
+        // Internal auditor must be assigned to this company
+        boolean isAuthorized = currentUser.getCompanyProfile() != null
                 && currentUser.getCompanyProfile().getId().equals(companyId);
-            System.out.println("DEBUG: Internal Auditor check - User CompanyProfile: " + 
-                             (currentUser.getCompanyProfile() != null ? currentUser.getCompanyProfile().getId() : "null") + 
-                             ", Target CompanyId: " + companyId + ", Authorized: " + isAuthorized);
-        }
 
         if (!isAuthorized) {
-            throw new UnauthorizedAccessException("You can only create responses for your own company");
+            throw new UnauthorizedAccessException("You can only create responses for your assigned company");
         }
 
         RequirementResponse response = new RequirementResponse();
@@ -122,10 +113,15 @@ public class RequirementResponseService {
         return buildResponseTree(saved);
     }
 
-    // 2️⃣ Create reply (external auditor, internal auditor, or company manager)
+    // 2️⃣ Create reply (external auditor or internal auditor only)
     public RequirementResponseDTO createReply(int parentResponseId, String responseText) {
         User currentUser = getCurrentUser();
-        
+
+        UserType role = currentUser.getRole().getRole();
+        if (role != UserType.EXTERNAL_AUDITOR && role != UserType.INTERNAL_AUDITOR) {
+            throw new UnauthorizedAccessException("Only auditors can reply to requirement responses");
+        }
+
         RequirementResponse parentResponse = requirementResponseRepository.findById(parentResponseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Parent response not found"));
 
@@ -140,10 +136,14 @@ public class RequirementResponseService {
         return buildResponseTree(saved);
     }
 
-    // 3️⃣ Update response
+    // 3️⃣ Update response (internal auditor only)
     public RequirementResponseDTO updateResponse(int id, String updatedText) {
         User currentUser = getCurrentUser();
-        
+
+        if (currentUser.getRole().getRole() != UserType.INTERNAL_AUDITOR) {
+            throw new UnauthorizedAccessException("Only internal auditors can update responses");
+        }
+
         RequirementResponse response = requirementResponseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Response not found"));
 
@@ -157,24 +157,27 @@ public class RequirementResponseService {
         return buildResponseTree(updated);
     }
 
-    // 4️⃣ Get all responses for a requirement (with replies) - returns top-level responses with nested replies
+    // 4️⃣ Get all responses for a requirement (with replies) - returns top-level
+    // responses with nested replies
     public List<RequirementResponseDTO> getAllResponses(int companyId, int requirementId) {
         List<RequirementResponse> topLevelResponses = requirementResponseRepository
-                .findByCompanyProfileIdAndRequirementIdAndParentResponseIsNullOrderByCreatedAtAsc(companyId, requirementId);
-        
+                .findByCompanyProfileIdAndRequirementIdAndParentResponseIsNullOrderByCreatedAtAsc(companyId,
+                        requirementId);
+
         return topLevelResponses.stream()
                 .map(this::buildResponseTree)
                 .collect(Collectors.toList());
     }
 
-    // 5️⃣ Get response by company + requirement (for backward compatibility - returns first top-level response)
+    // 5️⃣ Get response by company + requirement (for backward compatibility -
+    // returns first top-level response)
     public RequirementResponseDTO getResponseByCompanyAndRequirement(int companyId, int requirementId) {
         List<RequirementResponseDTO> allResponses = getAllResponses(companyId, requirementId);
-        
+
         if (allResponses.isEmpty()) {
             throw new ResourceNotFoundException("Response not found for this company and requirement");
         }
-        
+
         // Return the first top-level response (for backward compatibility)
         return allResponses.get(0);
     }

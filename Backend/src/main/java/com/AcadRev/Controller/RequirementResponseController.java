@@ -17,7 +17,7 @@ public class RequirementResponseController {
     private final RequirementResponseService requirementResponseService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('INTERNAL_AUDITOR', 'COMPANY_MANAGER')")
+    @PreAuthorize("hasRole('INTERNAL_AUDITOR')")
     public ResponseEntity<RequirementResponseDTO> createResponse(
             @RequestParam int requirementId,
             @RequestParam int companyId,
@@ -28,6 +28,7 @@ public class RequirementResponseController {
     }
 
     @PostMapping("/{parentResponseId}/reply")
+    @PreAuthorize("hasAnyRole('INTERNAL_AUDITOR', 'EXTERNAL_AUDITOR')")
     public ResponseEntity<RequirementResponseDTO> createReply(
             @PathVariable int parentResponseId,
             @RequestParam String responseText) {
@@ -37,6 +38,7 @@ public class RequirementResponseController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('INTERNAL_AUDITOR')")
     public ResponseEntity<RequirementResponseDTO> updateResponse(
             @PathVariable int id,
             @RequestParam String responseText) {
@@ -46,6 +48,7 @@ public class RequirementResponseController {
     }
 
     @GetMapping("/{companyId}/{requirementId}")
+    @PreAuthorize("hasAnyRole('INTERNAL_AUDITOR', 'EXTERNAL_AUDITOR', 'COMPANY_MANAGER')")
     public ResponseEntity<RequirementResponseDTO> getResponse(
             @PathVariable int companyId,
             @PathVariable int requirementId) {
@@ -55,6 +58,7 @@ public class RequirementResponseController {
     }
 
     @GetMapping("/{companyId}/{requirementId}/all")
+    @PreAuthorize("hasAnyRole('INTERNAL_AUDITOR', 'EXTERNAL_AUDITOR', 'COMPANY_MANAGER')")
     public ResponseEntity<List<RequirementResponseDTO>> getAllResponses(
             @PathVariable int companyId,
             @PathVariable int requirementId) {

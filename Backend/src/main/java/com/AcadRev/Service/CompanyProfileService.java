@@ -33,6 +33,7 @@ public class CompanyProfileService {
                 .address(companyProfile.getAddress())
                 .name(companyProfile.getName())
                 .industry(companyProfile.getIndustry())
+                .email(companyProfile.getEmail())
                 .build();
 
         return companyProfileRepository.save(createdProfile);
@@ -96,8 +97,30 @@ public class CompanyProfileService {
         existingProfile.setAddress(companyProfileDto.getAddress());
         existingProfile.setIndustry(companyProfileDto.getIndustry());
         existingProfile.setPhone(companyProfileDto.getPhone());
+        existingProfile.setEmail(companyProfileDto.getEmail());
 
-        return companyProfileRepository.save(existingProfile);
+        System.out.println("DEBUG: Updating company profile ID: " + id);
+        System.out.println("DEBUG: Email from DTO: " + companyProfileDto.getEmail());
+        System.out.println("DEBUG: Email being set: " + existingProfile.getEmail());
+
+        try {
+            CompanyProfile saved = companyProfileRepository.save(existingProfile);
+            System.out.println("DEBUG: Email after save: " + saved.getEmail());
+            
+            // Verify email was saved correctly
+            if (companyProfileDto.getEmail() != null && !companyProfileDto.getEmail().trim().isEmpty()) {
+                if (saved.getEmail() == null || !saved.getEmail().equals(companyProfileDto.getEmail())) {
+                    System.err.println("WARNING: Email was not saved correctly. Expected: " + companyProfileDto.getEmail() + ", Got: " + saved.getEmail());
+                    System.err.println("WARNING: This might indicate the 'email' column doesn't exist in the database. Please run the migration script.");
+                }
+            }
+            
+            return saved;
+        } catch (Exception e) {
+            System.err.println("ERROR: Failed to save company profile: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to update company profile: " + e.getMessage(), e);
+        }
     }
 
     public void deleteProfile(int id) {

@@ -20,5 +20,7 @@ public class CompanyProfileDto {
     @JsonProperty("phone")
     private String phone;
 
+    @JsonProperty("email")
+    private String email;
 
 }

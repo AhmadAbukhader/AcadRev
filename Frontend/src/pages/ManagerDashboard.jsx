@@ -57,6 +57,7 @@ export default function ManagerDashboard() {
     address: "",
     industry: "",
     phone: "",
+    email: "",
   })
 
   const [selectedISO, setSelectedISO] = useState("ISO 9001")
@@ -107,6 +108,7 @@ export default function ManagerDashboard() {
   const fetchCompanyData = async (compId) => {
     try {
       setLoading(true)
+      console.time('[ManagerDashboard] Total load time')
 
       // Fetch all data in parallel
       const [
@@ -118,14 +120,16 @@ export default function ManagerDashboard() {
         auditProgressData,
         auditStatusesData,
       ] = await Promise.all([
-        getMyDocuments(compId),
-        getAllSections(),
-        getAllRequirements(),
-        getRequirementStatuses(),
-        getRequirementStatusProgress(),
-        getAuditProgress(compId),
-        getRequirementsWithAuditStatus(compId),
+        getMyDocuments(compId).then(data => { console.log('✓ Documents loaded:', data?.length); return data }),
+        getAllSections().then(data => { console.log('✓ Sections loaded:', data?.length); return data }),
+        getAllRequirements().then(data => { console.log('✓ Requirements loaded:', data?.length); return data }),
+        getRequirementStatuses().then(data => { console.log('✓ Requirement statuses loaded:', data?.length); return data }),
+        getRequirementStatusProgress().then(data => { console.log('✓ Progress loaded:', data); return data }),
+        getAuditProgress(compId).then(data => { console.log('✓ Audit progress loaded:', data); return data }),
+        getRequirementsWithAuditStatus(compId).then(data => { console.log('✓ Audit statuses loaded:', data?.length); return data }),
       ])
+
+      console.timeEnd('[ManagerDashboard] Total load time')
 
       setDocuments(docsData || [])
       setSections(sectionsData || [])
@@ -181,6 +185,7 @@ export default function ManagerDashboard() {
       address: profile.address || "",
       industry: profile.industry || "",
       phone: profile.phone || "",
+      email: profile.email || "",
     })
     setEditingProfile(true)
   }
@@ -191,11 +196,14 @@ export default function ManagerDashboard() {
     setError("")
 
     try {
+      console.log("[handleUpdateProfile] Sending update with profileForm:", profileForm)
       const updatedProfile = await updateCompanyProfile(companyId, profileForm)
+      console.log("[handleUpdateProfile] Received updated profile:", updatedProfile)
       setProfile(updatedProfile)
       setEditingProfile(false)
       showToast("Company profile updated successfully!")
     } catch (err) {
+      console.error("[handleUpdateProfile] Error updating profile:", err)
       setError(err.response?.data?.message || err.message || "Failed to update profile")
     } finally {
       setCreatingProfile(false)
@@ -229,7 +237,8 @@ export default function ManagerDashboard() {
   }
 
   const getRequirementDocumentsForView = async (requirementId) => {
-    return await getRequirementDocuments(companyId, requirementId)
+    console.log(`[ManagerDashboard] Getting documents for requirement ${requirementId}, company ${companyId}`)
+    return await getRequirementDocuments(requirementId, companyId)
   }
 
   if (showCreateProfile) {
@@ -294,6 +303,18 @@ export default function ManagerDashboard() {
                 onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 placeholder="+1 (555) 000-0000"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Contact Email *</label>
+              <input
+                type="email"
+                required
+                value={profileForm.email}
+                onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                placeholder="contact@company.com"
               />
             </div>
 
@@ -454,6 +475,21 @@ export default function ManagerDashboard() {
                       className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     />
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Contact Email
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={profileForm.email}
+                      onChange={(e) =>
+                        setProfileForm({ ...profileForm, email: e.target.value })
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="contact@company.com"
+                    />
+                  </div>
                 </div>
 
                 {error && (
@@ -509,6 +545,13 @@ export default function ManagerDashboard() {
                   <div>
                     <p className="text-sm text-gray-600">Address</p>
                     <p className="font-semibold text-gray-900">{profile.address}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Mail className="w-5 h-5 text-green-600 mt-1" />
+                  <div>
+                    <p className="text-sm text-gray-600">Contact Email</p>
+                    <p className="font-semibold text-gray-900">{profile.email || "Not provided"}</p>
                   </div>
                 </div>
               </div>
@@ -581,6 +624,7 @@ export default function ManagerDashboard() {
               onUpdateStatus={null}
               onUpdateAuditStatus={null}
               onReview={null}
+              isReadOnly={true}
               onSectionClick={() => {
                 // Scroll to the top of requirements section when a section is clicked
                 // Small delay to ensure content has rendered
@@ -597,50 +641,6 @@ export default function ManagerDashboard() {
           </div>
         )}
 
-        {/* Documents List with Reviews */}
-        {companyId && documents.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-lg p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">All Documents & Reviews</h2>
-            <div className="space-y-4">
-              {documents.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="border border-gray-200 rounded-xl p-4 hover:border-green-300 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3">
-                        <FileText className="w-5 h-5 text-green-600" />
-                        <div>
-                          <p className="font-semibold text-gray-900">{doc.fileName}</p>
-                          <p className="text-sm text-gray-600">
-                            Type: {doc.documentType} • Uploaded:{" "}
-                            {new Date(doc.uploadedAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleViewReviews(doc)}
-                        className="px-4 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg transition-colors text-sm flex items-center gap-2"
-                      >
-                        <Star className="w-4 h-4" />
-                        View Reviews
-                      </button>
-                      <button
-                        onClick={() => handleDownload(doc.id, doc.fileName)}
-                        className="px-4 py-2 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg transition-colors"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Reviews Modal */}

@@ -4,6 +4,7 @@ import com.AcadRev.Dto.RequirementAuditingDTO;
 import com.AcadRev.Service.RequirementAuditingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,25 +17,26 @@ public class RequirementAuditingController {
     private final RequirementAuditingService auditingService;
 
     @PostMapping("/upsert")
+    @PreAuthorize("hasRole('EXTERNAL_AUDITOR')")
     public ResponseEntity<RequirementAuditingDTO> upsertAudit(
             @RequestParam int requirementId,
             @RequestParam int companyId,
-            @RequestParam int status
-    ) {
+            @RequestParam int status) {
         RequirementAuditingDTO dto = auditingService.upsertAudit(requirementId, companyId, status);
         return ResponseEntity.ok(dto);
     }
 
     @GetMapping("/progress/{companyId}")
+    @PreAuthorize("hasAnyRole('INTERNAL_AUDITOR', 'COMPANY_MANAGER', 'EXTERNAL_AUDITOR')")
     public ResponseEntity<Double> getProgress(@PathVariable int companyId) {
         double progress = auditingService.calculateProgress(companyId);
         return ResponseEntity.ok(progress);
     }
 
     @GetMapping("/company/{companyId}/requirements")
+    @PreAuthorize("hasAnyRole('INTERNAL_AUDITOR', 'COMPANY_MANAGER', 'EXTERNAL_AUDITOR')")
     public ResponseEntity<List<RequirementAuditingDTO>> getRequirementsWithStatus(
-            @PathVariable int companyId
-    ) {
+            @PathVariable int companyId) {
         List<RequirementAuditingDTO> result = auditingService.getRequirementsWithAuditStatus(companyId);
         return ResponseEntity.ok(result);
     }

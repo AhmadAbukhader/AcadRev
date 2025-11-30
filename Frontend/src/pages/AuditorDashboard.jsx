@@ -23,7 +23,7 @@ import {
   Check,
   XCircle,
 } from "lucide-react"
-import { getAllCompanies, getCompanyDocuments, reviewDocument, hasAlreadyReviewed, downloadFile, getAllSections, getAllRequirements, getRequirementDocuments, getRequirementsWithAuditStatus, upsertAudit, getAssignedCompanies } from "../lib/auditor-api"
+import { getAllCompanies, getCompanyDocuments, getCompanyProfile, reviewDocument, hasAlreadyReviewed, downloadFile, getAllSections, getAllRequirements, getRequirementDocuments, getRequirementsWithAuditStatus, upsertAudit, getAssignedCompanies, getCompanyRequirementStatuses } from "../lib/auditor-api"
 import RequirementsTabs from "../components/RequirementsTabs"
 
 export default function AuditorDashboard() {
@@ -40,6 +40,7 @@ export default function AuditorDashboard() {
   const [sections, setSections] = useState([])
   const [requirements, setRequirements] = useState([])
   const [auditStatuses, setAuditStatuses] = useState([])
+  const [requirementStatuses, setRequirementStatuses] = useState([])
   
   // Ref for scrolling to requirements section
   const requirementsSectionRef = useRef(null)
@@ -92,7 +93,7 @@ export default function AuditorDashboard() {
 
   const fetchCompanyDocuments = async (companyId) => {
     try {
-      const [docsData, sectionsData, requirementsData, auditStatusesData] = await Promise.all([
+      const [docsData, sectionsData, requirementsData, auditStatusesData, requirementStatusesData] = await Promise.all([
         getCompanyDocuments(companyId),
         getAllSections().catch((err) => {
           console.error("Failed to load sections:", err)
@@ -105,17 +106,23 @@ export default function AuditorDashboard() {
         getRequirementsWithAuditStatus(companyId).catch((err) => {
           console.error("Failed to load audit statuses:", err)
           return []
+        }),
+        getCompanyRequirementStatuses(companyId).catch((err) => {
+          console.error("Failed to load requirement statuses:", err)
+          return []
         })
       ])
       
       console.log("Fetched sections:", sectionsData)
       console.log("Fetched requirements:", requirementsData)
       console.log("Fetched audit statuses:", auditStatusesData)
+      console.log("Fetched requirement statuses:", requirementStatusesData)
       
       setCompanyDocuments(docsData)
       setSections(sectionsData)
       setRequirements(requirementsData)
       setAuditStatuses(auditStatusesData)
+      setRequirementStatuses(requirementStatusesData)
 
       // Check which documents the user has already reviewed
       const userId = localStorage.getItem("userId")
@@ -135,8 +142,17 @@ export default function AuditorDashboard() {
   }
 
   const handleCompanyClick = async (company) => {
-    setSelectedCompany(company)
-    await fetchCompanyDocuments(company.id)
+    try {
+      // Fetch the full company profile with all details
+      const fullCompanyProfile = await getCompanyProfile(company.id)
+      setSelectedCompany(fullCompanyProfile)
+      await fetchCompanyDocuments(company.id)
+    } catch (err) {
+      console.error("Error fetching company profile:", err)
+      // Fallback to the basic company data if profile fetch fails
+      setSelectedCompany(company)
+      await fetchCompanyDocuments(company.id)
+    }
   }
 
   const handleDownload = async (documentId, filename) => {
@@ -382,7 +398,7 @@ export default function AuditorDashboard() {
                     <Mail className="w-5 h-5 text-purple-600" />
                     <div>
                       <p className="text-xs text-gray-500">Contact Email</p>
-                      <p className="font-semibold text-gray-900">{selectedCompany.user?.username || "Not provided"}</p>
+                      <p className="font-semibold text-gray-900">{selectedCompany.email || "Not provided"}</p>
                     </div>
                   </div>
                 </div>
@@ -401,14 +417,6 @@ export default function AuditorDashboard() {
                     <div>
                       <p className="text-xs text-gray-500">Industry</p>
                       <p className="font-semibold text-gray-900">{selectedCompany.industry || "Not provided"}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <div className="w-5 h-5 text-purple-600" />
-                    <div>
-                      <p className="text-xs text-gray-500">Company ID</p>
-                      <p className="font-semibold text-gray-900">{selectedCompany.id}</p>
                     </div>
                   </div>
                 </div>
@@ -430,6 +438,7 @@ export default function AuditorDashboard() {
                 onReview={handleReviewClick}
                 onDownload={handleDownload}
                 getRequirementDocuments={getRequirementDocuments}
+                requirementStatuses={requirementStatuses || []}
                 auditStatuses={auditStatuses || []}
                 onUpdateAuditStatus={handleUpdateAuditStatus}
                 onSectionClick={() => {

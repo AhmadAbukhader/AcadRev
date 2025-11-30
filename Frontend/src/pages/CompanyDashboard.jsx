@@ -396,8 +396,10 @@ export default function CompanyDashboard() {
                 <Building2 className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">Company Dashboard</h1>
-                <p className="text-sm text-gray-600">Company ID: {companyId}</p>
+                <h1 className="text-xl font-bold text-gray-900">Internal Auditor Dashboard</h1>
+                <p className="text-sm text-gray-600">
+                  company : {profile ? profile.name : "Viewing company overview"}
+                </p>
               </div>
             </div>
             <button
@@ -435,7 +437,7 @@ export default function CompanyDashboard() {
                     <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 rounded-lg border border-indigo-200">
                       <div className="w-2 h-2 bg-indigo-600 rounded-full animate-pulse"></div>
                       <span className="text-sm font-medium text-indigo-700">
-                        Company Progress: {statusProgress}%
+                        Internal Auditor Progress: {statusProgress}%
                       </span>
                     </div>
                     <div className="flex items-center gap-2 px-4 py-2 bg-purple-50 rounded-lg border border-purple-200">
@@ -564,6 +566,14 @@ export default function CompanyDashboard() {
                   <div>
                     <p className="text-xs text-gray-500">Phone</p>
                     <p className="font-semibold text-gray-900">{profile.phone || "Not provided"}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                  <Mail className="w-5 h-5 text-indigo-600" />
+                  <div>
+                    <p className="text-xs text-gray-500">Contact Email</p>
+                    <p className="font-semibold text-gray-900">{profile.email || "Not provided"}</p>
                   </div>
                 </div>
               </div>
